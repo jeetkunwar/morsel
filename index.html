@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#FAF8F3" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Morsel — snap what you eat</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root {
+    --bg:#FAF8F3; --bg-2:#F1EEE6; --card:#FFFFFF; --ink:#2B2A27; --ink-soft:#7A786F;
+    --clay:#CC785C; --clay-deep:#B5634A; --line:#E7E3D8; --line-2:#E4E0D6;
+    --shadow:rgba(43,42,39,0.14); --good:#5FA37A;
+    --kcal:#CC785C; --protein:#5FA37A; --fiber:#9B86C9;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overscroll-behavior:none; }
+  body { font-family:ui-rounded,"SF Pro Rounded","Segoe UI",system-ui,sans-serif; background:var(--bg);
+         color:var(--ink); -webkit-font-smoothing:antialiased; height:100dvh; overflow:hidden; }
+  .app { position:relative; height:100dvh; max-width:560px; margin:0 auto; overflow:hidden; }
+
+  .screen { position:absolute; inset:0; display:none; flex-direction:column; }
+  .screen.active { display:flex; }
+  .scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+            padding:calc(16px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+
+  .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .brand { font-weight:800; font-size:24px; letter-spacing:-.5px; } .brand .dot { color:var(--clay); }
+  .brand-sub { font-size:12px; color:var(--ink-soft); margin-top:1px; }
+  .chip { font-size:12px; font-weight:700; color:var(--clay-deep); background:#fff;
+          border:1.5px solid var(--line-2); border-radius:999px; padding:5px 11px; }
+
+  /* ===== CAMERA ===== */
+  #cam { background:#15140f; }
+  .vf-wrap { flex:1; position:relative; overflow:hidden; }
+  #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #vfFallback { position:absolute; inset:0; display:none; flex-direction:column; align-items:center;
+                justify-content:center; gap:14px; color:#EFE9DD; text-align:center; padding:30px; }
+  #vfFallback .big { font-size:54px; }
+  .vf-top { position:absolute; top:0; left:0; right:0; z-index:3; display:flex; justify-content:space-between;
+            align-items:center; padding:calc(14px + env(safe-area-inset-top)) 18px 14px;
+            background:linear-gradient(#00000066,transparent); }
+  .vf-top .wm { color:#fff; font-weight:800; font-size:19px; letter-spacing:-.4px; text-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .gear { width:38px; height:38px; border-radius:50%; border:none; background:rgba(255,255,255,.18);
+          backdrop-filter:blur(6px); color:#fff; font-size:18px; }
+  .rings-bar { position:absolute; top:calc(60px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+               z-index:3; display:flex; gap:6px; background:rgba(20,19,15,.5); backdrop-filter:blur(8px);
+               border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:8px 12px; }
+  .rings-bar .ring-u { display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .rings-bar .ring-u .lbl { font-size:9px; font-weight:700; color:rgba(255,255,255,.75); letter-spacing:.3px; }
+  .vf-hint { position:absolute; left:50%; bottom:120px; transform:translateX(-50%); color:#fff; font-size:13px;
+             font-weight:600; background:rgba(0,0,0,.28); padding:7px 14px; border-radius:999px;
+             backdrop-filter:blur(4px); white-space:nowrap; }
+
+  .ring-num { font-weight:800; font-size:11px; fill:#fff; }
+  .ring-num.dark { fill:var(--ink); }
+
+  /* ===== COMPOSE ===== */
+  #compose { position:absolute; inset:0; z-index:1500; background:var(--bg); display:none; flex-direction:column; }
+  #compose.show { display:flex; animation:rise .28s cubic-bezier(.2,.8,.2,1); }
+  @keyframes rise { from{transform:translateY(100%);} to{transform:none;} }
+  .compose-top { display:flex; justify-content:space-between; align-items:center;
+                 padding:calc(14px + env(safe-area-inset-top)) 18px 6px; }
+  .compose-top button { border:none; background:transparent; font-family:inherit; font-weight:700; font-size:15px; color:var(--ink-soft); }
+  .compose-body { flex:1; overflow-y:auto; padding:4px 18px 40px; }
+
+  .stage { position:relative; margin:6px auto 2px; width:min(70vw,260px); aspect-ratio:1/1; display:grid; place-items:center; }
+  .stage .plate { position:absolute; width:74%; height:74%; bottom:8%; border-radius:50%;
+                  background:radial-gradient(ellipse at center, rgba(0,0,0,.16), transparent 70%); filter:blur(3px); }
+  .stage img { max-width:100%; max-height:100%; object-fit:contain; filter:drop-shadow(0 14px 18px rgba(0,0,0,.28)); transition:opacity .25s; }
+  .stage.framed img { width:100%; height:100%; object-fit:cover; border-radius:22px; filter:drop-shadow(0 12px 22px rgba(0,0,0,.18)); }
+  .cut-chip { display:flex; align-items:center; gap:8px; justify-content:center; width:max-content; margin:2px auto 0;
+              font-size:12.5px; font-weight:700; color:var(--ink-soft); background:#fff; border:1.5px solid var(--line-2);
+              border-radius:999px; padding:6px 13px; }
+  .cut-chip.err { color:var(--clay-deep); border-color:#EAD3C8; background:#FBEEE7; } .cut-chip.err .ring2 { display:none; }
+  .ring2 { width:13px; height:13px; border:2.5px solid var(--line-2); border-top-color:var(--clay);
+           border-radius:50%; animation:sp .8s linear infinite; display:inline-block; }
+  @keyframes sp { to{transform:rotate(360deg);} }
+
+  .name-in { width:100%; text-align:center; border:none; background:transparent; font-family:inherit;
+             font-weight:800; font-size:26px; color:var(--ink); letter-spacing:-.5px; margin-top:8px; }
+  .name-in:focus { outline:none; } .name-in::placeholder { color:#C9C5BA; }
+  .name-rule { height:2px; background:var(--line-2); border-radius:2px; width:56%; margin:2px auto 0; }
+
+  .macro-row { display:flex; gap:9px; margin-top:16px; }
+  .macro { flex:1; background:var(--card); border:1.5px solid var(--line-2); border-radius:15px; padding:11px 8px;
+           text-align:center; box-shadow:0 4px 12px var(--shadow); }
+  .macro input { width:100%; border:none; background:transparent; font-family:inherit; font-weight:800; font-size:22px;
+                 text-align:center; color:var(--ink); } .macro input:focus { outline:none; }
+  .macro.kcal input { color:var(--kcal); } .macro.protein input { color:var(--protein); } .macro.fiber input { color:var(--fiber); }
+  .macro .mlbl { font-size:11px; font-weight:700; color:var(--ink-soft); margin-top:2px; letter-spacing:.3px; }
+  .analyze-note { text-align:center; font-size:12px; color:var(--ink-soft); margin-top:10px; min-height:16px; }
+  .analyze-note .tap { color:var(--clay-deep); font-weight:700; text-decoration:underline; }
+
+  .loc-card { margin-top:18px; background:var(--card); border:1.5px solid var(--line-2); border-radius:18px; padding:15px; box-shadow:0 6px 16px var(--shadow); }
+  .loc-q { font-size:13px; color:var(--ink-soft); font-weight:700; display:flex; align-items:center; gap:8px; }
+  .loc-name { font-size:20px; font-weight:800; margin:8px 0 2px; letter-spacing:-.3px; }
+  .loc-dist { font-size:12px; color:var(--ink-soft); }
+  .loc-actions { display:flex; gap:9px; margin-top:13px; }
+  .btn-yes { flex:1; padding:13px; border:none; border-radius:13px; background:var(--clay); color:#fff; font-weight:800; font-size:15px; font-family:inherit; box-shadow:0 6px 14px rgba(204,120,92,.35); }
+  .btn-no { padding:13px 16px; border:1.5px solid var(--line-2); border-radius:13px; background:#fff; color:var(--ink-soft); font-weight:700; font-size:14px; font-family:inherit; }
+  .others { margin-top:12px; display:none; flex-direction:column; gap:8px; } .others.show { display:flex; }
+  .others .lbl { font-size:12px; color:var(--ink-soft); font-weight:700; }
+  .opt { text-align:left; width:100%; padding:11px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; display:flex; align-items:center; gap:10px; }
+  .opt .on { font-weight:700; font-size:14.5px; } .opt .od { font-size:12px; color:var(--ink-soft); } .opt .oi { font-size:19px; }
+  .add-place input, .resto-custom { width:100%; padding:11px 13px; border:1.5px dashed var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-size:14px; }
+  .loc-confirmed { display:flex; align-items:center; gap:8px; color:var(--good); font-weight:700; font-size:14px; }
+  .autosave-note { text-align:center; font-size:12px; color:var(--ink-soft); margin-top:18px; opacity:.85; }
+
+  /* ===== BOOK (collage) ===== */
+  .collage { column-count:2; column-gap:14px; margin-top:10px; }
+  .m-card { break-inside:avoid; margin-bottom:16px; position:relative; text-align:center; cursor:pointer; }
+  .m-card .well { border-radius:18px; padding:10px; display:grid; place-items:center; position:relative; }
+  .m-card.cut .well { background:var(--bg-2); }
+  .m-card .well img.cut { width:88%; object-fit:contain; filter:drop-shadow(0 10px 14px rgba(0,0,0,.22)); }
+  .m-card .well img.full { width:100%; border-radius:14px; }
+  .m-card .dish { font-weight:800; font-size:15px; margin:8px 3px 1px; letter-spacing:-.2px; line-height:1.15; }
+  .m-card .dish.unnamed { color:#BDB9AE; font-weight:600; }
+  .m-card .kc { font-size:12px; font-weight:700; color:var(--kcal); }
+  .m-card .sub { font-size:11px; color:var(--ink-soft); margin-top:1px; }
+  .m-card .sub .pin { color:var(--clay-deep); font-weight:700; }
+  .m-card .del { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:999px; border:none;
+                 background:rgba(43,42,39,.45); color:#fff; font-size:13px; opacity:0; transition:opacity .2s; z-index:2; }
+  .m-card:active .del { opacity:1; }
+  .m-card:nth-child(2n) { transform:rotate(.6deg); } .m-card:nth-child(2n+1) { transform:rotate(-.5deg); }
+
+  .empty { text-align:center; color:var(--ink-soft); padding:50px 24px; }
+  .empty .big { font-size:52px; } .empty h2 { color:var(--ink); margin:12px 0 6px; }
+  .empty .cta { margin-top:16px; display:inline-block; background:var(--clay); color:#fff; font-weight:800; padding:12px 20px; border-radius:14px; border:none; font-family:inherit; font-size:15px; }
+
+  /* ===== MAP ===== */
+  #mapEl { flex:1; }
+  .leaflet-popup-content { font-family:inherit; margin:10px; }
+  .map-pin { width:46px; height:46px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,.35);
+             overflow:hidden; background:var(--bg-2); display:grid; place-items:center; }
+  .map-pin img { width:100%; height:100%; object-fit:cover; }
+  .pop { width:160px; } .pop .pi { width:100%; height:100px; object-fit:cover; border-radius:8px; background:var(--bg-2); }
+  .pop .pd { font-weight:800; margin-top:6px; font-size:14px; } .pop .pm { font-size:11.5px; color:var(--ink-soft); }
+  .pop .pmac { font-size:11.5px; font-weight:700; color:var(--kcal); margin-top:2px; }
+
+  /* ===== Bottom nav ===== */
+  nav.tabs { position:absolute; bottom:0; left:0; right:0; z-index:2000; display:flex; justify-content:center;
+             padding:10px 14px calc(12px + env(safe-area-inset-bottom)); pointer-events:none; }
+  .tabs .bar { display:flex; gap:4px; background:#fff; border:1.5px solid var(--line-2); border-radius:999px; padding:6px; box-shadow:0 8px 22px var(--shadow); pointer-events:auto; }
+  .tab { border:none; background:transparent; font-family:inherit; font-weight:700; font-size:13px; color:var(--ink-soft); padding:9px 15px; border-radius:999px; display:flex; align-items:center; gap:6px; }
+  .tab.active { background:var(--bg-2); color:var(--ink); } .tab .ic { font-size:16px; }
+  .tab.shoot { background:var(--clay); color:#fff; padding:9px 17px; } .tab.shoot.active { background:var(--clay); }
+  #cam nav.tabs .bar { background:rgba(20,19,15,.55); border-color:rgba(255,255,255,.14); backdrop-filter:blur(8px); }
+  #cam .tab { color:rgba(255,255,255,.7); } #cam .tab.active { background:rgba(255,255,255,.16); color:#fff; } #cam .tab.shoot { background:var(--clay); color:#fff; }
+
+  /* ===== Sheets (today / settings) ===== */
+  .sheet { position:absolute; inset:0; z-index:3000; background:rgba(20,19,15,.4); display:none; align-items:flex-end; }
+  .sheet.show { display:flex; animation:fade .2s; } @keyframes fade { from{opacity:0;} to{opacity:1;} }
+  .sheet-card { width:100%; background:var(--bg); border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom));
+                max-height:88%; overflow-y:auto; animation:rise .28s cubic-bezier(.2,.8,.2,1); }
+  .sheet-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .sheet-h h2 { margin:0; font-size:20px; font-weight:800; } .sheet-h .x { border:none; background:var(--bg-2); width:32px; height:32px; border-radius:999px; font-size:16px; font-family:inherit; }
+  .today-rings { display:flex; justify-content:space-around; margin:6px 0 4px; }
+  .today-rings .ring-u { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .today-rings .ring-u .lbl { font-size:12px; font-weight:700; color:var(--ink-soft); }
+  .today-rings .ring-u .goal { font-size:11px; color:var(--ink-soft); }
+  .fld { margin-top:14px; } .fld label { display:block; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; }
+  .fld input, .fld select { width:100%; padding:12px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-size:15px; color:var(--ink); }
+  .fld input:focus, .fld select:focus { outline:none; border-color:var(--clay); }
+  .goals-grid { display:flex; gap:9px; } .goals-grid .fld { flex:1; }
+  .save-settings { width:100%; margin-top:18px; padding:15px; border:none; border-radius:14px; background:var(--ink); color:#fff; font-weight:800; font-size:16px; font-family:inherit; }
+  .note { font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5; }
+  .note b { color:var(--clay-deep); }
+
+  .hidden { display:none !important; }
+  #toast { position:absolute; bottom:120px; left:50%; transform:translateX(-50%) translateY(20px); z-index:3500;
+           background:var(--ink); color:#fff; padding:11px 18px; border-radius:999px; font-weight:700; font-size:14px; opacity:0; transition:all .3s; pointer-events:none; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== CAMERA ===== -->
+  <section class="screen active" id="cam">
+    <div class="vf-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="vfFallback">
+        <div class="big">📷</div>
+        <div><b>Camera not available here</b><br/><span style="opacity:.8;font-size:13px">Tap anywhere to pick a photo instead</span></div>
+      </div>
+      <div class="vf-top">
+        <div class="wm">Morsel<span style="color:var(--clay)">.</span></div>
+        <button class="gear" id="gearBtn">⚙</button>
+      </div>
+      <div class="rings-bar" id="ringsBar"></div>
+      <div class="vf-hint">point at what you're eating</div>
+    </div>
+    <input type="file" id="fileIn" accept="image/*" capture="environment" class="hidden" />
+  </section>
+
+  <!-- ===== BOOK ===== -->
+  <section class="screen" id="book">
+    <div class="scroll">
+      <div class="head">
+        <div><div class="brand">Morsel<span class="dot">.</span></div><div class="brand-sub">your food scrapbook</div></div>
+        <div class="chip" id="countChip">0 morsels</div>
+      </div>
+      <div class="collage" id="feed"></div>
+      <div class="empty hidden" id="emptyBook">
+        <div class="big">🍳</div><h2>No morsels yet</h2>
+        <p>Point the camera at your next bite<br/>and snap. Name + macros fill in.</p>
+        <button class="cta" data-go="cam">Open camera</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MAP ===== -->
+  <section class="screen" id="map">
+    <div style="flex:none; padding:calc(16px + env(safe-area-inset-top)) 16px 8px;">
+      <div class="head"><div><div class="brand">Your map</div><div class="brand-sub">where you ate what</div></div></div>
+    </div>
+    <div id="mapEl"></div>
+    <div class="empty hidden" id="emptyMap" style="position:absolute;top:40%;left:0;right:0;">
+      <div class="big">🗺️</div><h2>Map's empty</h2><p>Confirm a place when you add a<br/>morsel and a pin lands here.</p>
+    </div>
+  </section>
+
+  <!-- ===== COMPOSE ===== -->
+  <section id="compose">
+    <div class="compose-top">
+      <button id="discardBtn">✕ Discard</button>
+      <span style="font-weight:800" id="composeTitle">New morsel</span>
+      <button id="doneBtn" style="color:var(--clay-deep)">Done ✓</button>
+    </div>
+    <div class="compose-body">
+      <div class="stage framed" id="stage">
+        <div class="plate" id="plate"></div>
+        <img id="stageImg" alt="" />
+      </div>
+      <div class="cut-chip hidden" id="cutChip"><span class="ring2"></span>making sticker…</div>
+
+      <input class="name-in" id="nameIn" placeholder="Naming it…" maxlength="50" />
+      <div class="name-rule"></div>
+
+      <div class="macro-row">
+        <div class="macro kcal"><input id="mKcal" inputmode="numeric" placeholder="—" /><div class="mlbl">kcal</div></div>
+        <div class="macro protein"><input id="mProtein" inputmode="numeric" placeholder="—" /><div class="mlbl">protein g</div></div>
+        <div class="macro fiber"><input id="mFiber" inputmode="numeric" placeholder="—" /><div class="mlbl">fiber g</div></div>
+      </div>
+      <div class="analyze-note" id="analyzeNote"></div>
+
+      <div class="loc-card" id="locCard">
+        <div class="loc-q" id="locQ"><span class="ring2"></span> finding where you are…</div>
+        <div id="locConfirmBlock" class="hidden">
+          <div class="loc-name" id="locName">—</div>
+          <div class="loc-dist" id="locDist"></div>
+          <div class="loc-actions">
+            <button class="btn-yes" id="btnYes">✓ Yes, here</button>
+            <button class="btn-no" id="btnNo">Not here</button>
+          </div>
+          <div class="others" id="others">
+            <span class="lbl">Pick the right one:</span>
+            <div id="optList"></div>
+            <div class="add-place"><input id="addPlace" placeholder="＋ Add a place by name" /></div>
+            <button class="btn-no hidden" id="retryLoc" style="margin-top:2px">↻ Retry location</button>
+          </div>
+        </div>
+        <div id="locDone" class="hidden"><div class="loc-confirmed">📍 <span id="doneName"></span> <button class="btn-no" id="changeLoc" style="margin-left:auto;padding:6px 12px">change</button></div></div>
+      </div>
+      <div class="autosave-note">✓ saved to your book — tweak anything, it keeps itself</div>
+    </div>
+  </section>
+
+  <!-- ===== NAV ===== -->
+  <nav class="tabs">
+    <div class="bar">
+      <button class="tab" data-go="book"><span class="ic">📖</span>Book</button>
+      <button class="tab shoot active" data-go="cam"><span class="ic">📸</span>Snap</button>
+      <button class="tab" data-go="map"><span class="ic">🗺️</span>Map</button>
+    </div>
+  </nav>
+
+  <!-- ===== TODAY SHEET ===== -->
+  <div class="sheet" id="todaySheet">
+    <div class="sheet-card">
+      <div class="sheet-h"><h2>Today</h2><button class="x" data-close="todaySheet">✕</button></div>
+      <div class="today-rings" id="todayRings"></div>
+      <div class="note" id="todayNote" style="text-align:center; margin-top:14px"></div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS SHEET ===== -->
+  <div class="sheet" id="settingsSheet">
+    <div class="sheet-card">
+      <div class="sheet-h"><h2>Settings</h2><button class="x" data-close="settingsSheet">✕</button></div>
+      <div class="fld">
+        <label>Nutrition engine <span style="font-weight:600">(auto name + macros)</span></label>
+        <select id="setProvider">
+          <option value="openrouter">OpenRouter — free vision models</option>
+          <option value="anthropic">Anthropic Claude — paid</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label id="keyLabel">OpenRouter API key</label>
+        <input id="setKey" type="password" placeholder="sk-or-..." autocomplete="off" />
+        <div class="note" id="keyHint" style="margin-top:6px"></div>
+      </div>
+      <div class="fld">
+        <label>Model</label>
+        <input id="setModel" placeholder="model id" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        <div class="note" id="modelHint" style="margin-top:6px"></div>
+      </div>
+      <label style="display:block; font-size:13px; font-weight:700; color:var(--ink-soft); margin:16px 0 6px">Daily goals</label>
+      <div class="goals-grid">
+        <div class="fld" style="margin-top:0"><label>kcal</label><input id="setKcal" inputmode="numeric" /></div>
+        <div class="fld" style="margin-top:0"><label>protein g</label><input id="setProtein" inputmode="numeric" /></div>
+        <div class="fld" style="margin-top:0"><label>fiber g</label><input id="setFiber" inputmode="numeric" /></div>
+      </div>
+      <button class="save-settings" id="saveSettings">Save</button>
+      <div class="note">🔒 Your API key is stored <b>only on this device</b> (this browser) and is sent straight to your chosen provider when you snap — there's no server in between. Don't enter it on a shared/public device. Photos and macros never leave your phone except the single image sent to estimate nutrition.</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<!-- background-removal (browser ML) -->
+<script type="module">
+  let rb = null;
+  try { const mod = await import("https://esm.sh/@imgly/background-removal@1.6.0"); rb = mod.removeBackground; }
+  catch (e) { console.warn("cutout module unavailable:", e); }
+  window.__removeBg = rb; window.__cutoutReady = true; window.dispatchEvent(new Event("cutout-ready"));
+</script>
+
+<script>
+/* ===================== Morsel V2 — snap → cutout + name + macros → rings ===================== */
+const $ = (s) => document.querySelector(s);
+
+/* ---------- settings ---------- */
+const DEFAULT_SETTINGS = { provider:"openrouter", apiKey:"", model:"google/gemini-2.0-flash-exp:free", goalKcal:2000, goalProtein:120, goalFiber:30 };
+const OR_DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free", CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6";
+function getSettings() { let saved = {}; try { saved = JSON.parse(localStorage.getItem("morsel_settings") || "{}"); } catch {}
+  const s = { ...DEFAULT_SETTINGS, ...saved };
+  if (!saved.provider) s.provider = (saved.model || s.model || "").startsWith("claude") ? "anthropic" : "openrouter"; // migrate older saves by raw model
+  return s; }
+function setSettings(s) { localStorage.setItem("morsel_settings", JSON.stringify(s)); }
+
+/* ---------- IndexedDB ---------- */
+const DB = (() => {
+  let db;
+  const open = () => new Promise((res, rej) => {
+    const r = indexedDB.open("morsel", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("entries", { keyPath: "id" }).createIndex("ts", "ts");
+    r.onsuccess = () => { db = r.result; res(); }; r.onerror = () => rej(r.error);
+  });
+  const st = (m) => db.transaction("entries", m).objectStore("entries");
+  return {
+    open,
+    put: (e) => new Promise((res, rej) => { const q = st("readwrite").put(e); q.onsuccess = res; q.onerror = () => rej(q.error); }),
+    del: (id) => new Promise((res, rej) => { const q = st("readwrite").delete(id); q.onsuccess = res; q.onerror = () => rej(q.error); }),
+    all: () => new Promise((res, rej) => { const q = st("readonly").getAll(); q.onsuccess = () => res(q.result.sort((a, b) => b.ts - a.ts)); q.onerror = () => rej(q.error); }),
+  };
+})();
+
+const toast = (m) => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 1800); };
+const url = (b) => URL.createObjectURL(b);
+const esc = (s) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function timeAgo(ts) { const d = (Date.now() - ts) / 1000;
+  if (d < 60) return "just now"; if (d < 3600) return Math.floor(d / 60) + "m ago";
+  if (d < 86400) return Math.floor(d / 3600) + "h ago"; const dd = Math.floor(d / 86400);
+  if (dd === 1) return "yesterday"; if (dd < 7) return dd + "d ago";
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+const isToday = (ts) => { const d = new Date(ts), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); };
+
+/* ===================== RINGS ===================== */
+function ringSVG(pct, color, dark, val, size = 50, stroke = 5.5) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.min(pct, 1));
+  const track = dark ? "rgba(43,42,39,.12)" : "rgba(255,255,255,.18)";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      transform="rotate(-90 ${size/2} ${size/2})"/>
+    <text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" class="ring-num ${dark ? "dark" : ""}">${val}</text>
+  </svg>`;
+}
+function todayTotals() {
+  const t = cache.filter((e) => isToday(e.ts));
+  return { kcal: Math.round(t.reduce((s, e) => s + (+e.kcal || 0), 0)),
+           protein: Math.round(t.reduce((s, e) => s + (+e.protein || 0), 0)),
+           fiber: Math.round(t.reduce((s, e) => s + (+e.fiber || 0), 0)) };
+}
+function renderRings() {
+  const s = getSettings(), t = todayTotals();
+  const bar = $("#ringsBar");
+  bar.innerHTML = [
+    ["kcal", t.kcal, s.goalKcal, "var(--kcal)"], ["protein", t.protein, s.goalProtein, "var(--protein)"], ["fiber", t.fiber, s.goalFiber, "var(--fiber)"],
+  ].map(([lbl, v, g, col]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, false, v, 44, 5)}<span class="lbl">${lbl}</span></div>`).join("");
+  // today sheet (bigger)
+  const big = $("#todayRings");
+  if (big) big.innerHTML = [
+    ["calories", t.kcal, s.goalKcal, "var(--kcal)", "kcal"], ["protein", t.protein, s.goalProtein, "var(--protein)", "g"], ["fiber", t.fiber, s.goalFiber, "var(--fiber)", "g"],
+  ].map(([lbl, v, g, col, u]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, true, v, 84, 8)}<span class="lbl">${lbl}</span><span class="goal">/ ${g}${u}</span></div>`).join("");
+  const n = $("#todayNote");
+  if (n) n.textContent = cache.filter((e) => isToday(e.ts)).length + " logged today";
+}
+
+/* ===================== CAMERA ===================== */
+let stream = null;
+async function startCamera() {
+  if (stream) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    $("#video").srcObject = stream; $("#vfFallback").style.display = "none"; $("#video").style.display = "block";
+  } catch (e) { $("#video").style.display = "none"; $("#vfFallback").style.display = "flex"; }
+}
+function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; $("#video").srcObject = null; } }
+function captureFrame() {
+  const v = $("#video");
+  if (!stream || !v.videoWidth) { $("#fileIn").click(); return; }
+  const side = Math.min(v.videoWidth, v.videoHeight), s = Math.min(side, 1100);
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  c.getContext("2d").drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, s, s);
+  c.toBlob((b) => openCompose(b), "image/jpeg", 0.85);
+}
+$("#video").addEventListener("click", captureFrame);
+$("#vfFallback").addEventListener("click", () => $("#fileIn").click());
+$("#fileIn").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; openCompose(await squareCompress(f)); e.target.value = ""; });
+function squareCompress(file) {
+  return new Promise((res) => { const img = new Image(); img.onload = () => {
+    const side = Math.min(img.width, img.height), s = Math.min(side, 1100);
+    const c = document.createElement("canvas"); c.width = c.height = s;
+    c.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, s, s);
+    c.toBlob((b) => res(b), "image/jpeg", 0.85);
+  }; img.src = URL.createObjectURL(file); });
+}
+
+/* ===================== COMPOSE ===================== */
+const cstate = { id:null, ts:0, token:null, raw:null, display:null, cut:false,
+  dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, nearby:[] };
+let composeOpen = false;
+
+async function openCompose(rawBlob) {
+  Object.assign(cstate, { id:"m_"+Date.now(), ts:Date.now(), token:Symbol(), raw:rawBlob, display:rawBlob, cut:false,
+    dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, nearby:[] });
+  composeOpen = true;
+  $("#composeTitle").textContent = "New morsel";
+  $("#nameIn").value = ""; $("#mKcal").value = ""; $("#mProtein").value = ""; $("#mFiber").value = "";
+  $("#analyzeNote").innerHTML = "";
+  $("#locQ").classList.remove("hidden"); $("#locConfirmBlock").classList.add("hidden");
+  $("#locDone").classList.add("hidden"); $("#others").classList.remove("show");
+  $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; $("#optList").innerHTML = ""; $("#addPlace").value = "";
+
+  $("#compose").classList.add("show");
+  $("#stage").classList.add("framed"); $("#stageImg").style.opacity = "1"; $("#stageImg").src = url(rawBlob); $("#plate").style.display = "none";
+
+  saveDraft();
+  toast("Saved to your book ✓");   // it's logged immediately — sticker & macros fill in after
+  runCutout(rawBlob);
+  analyzeFood(rawBlob);
+  lookupLocation();
+}
+
+let saveTimer;
+async function saveDraft() {
+  if (!cstate.id || !cstate.display) return;
+  await DB.put({ id:cstate.id, ts:cstate.ts, blob:cstate.display, cut:cstate.cut,
+    dish:$("#nameIn").value.trim(), cuisine:cstate.cuisine,
+    kcal:numOrNull($("#mKcal").value), protein:numOrNull($("#mProtein").value), fiber:numOrNull($("#mFiber").value),
+    confidence:cstate.confidence, place:cstate.place ? cstate.place.name : null,
+    lat:cstate.coords ? cstate.coords.lat : null, lon:cstate.coords ? cstate.coords.lon : null });
+}
+const numOrNull = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveDraft(); renderRings(); }, 350); };
+["#nameIn", "#mKcal", "#mProtein", "#mFiber"].forEach((id) => $(id).addEventListener("input", saveSoon));
+
+/* ---------- cutout ---------- */
+function setChip(text, isErr) { const c = $("#cutChip"); c.classList.remove("hidden"); c.classList.toggle("err", !!isErr);
+  c.lastChild ? (c.lastChild.textContent = " " + text) : (c.textContent = text); }
+const CUTOUT_TIMEOUT = 60000;
+async function runCutout(blob) {
+  const token = cstate.token;
+  if (!window.__removeBg) { $("#cutChip").classList.add("hidden"); return; }
+  setChip("preparing sticker…", false);
+  const done = (displayBlob, isCut, errMsg) => {
+    if (cstate.token !== token) return;
+    if (!isCut) { setChip(errMsg || "kept the photo", true); setTimeout(() => { if (cstate.token === token) $("#cutChip").classList.add("hidden"); }, 2600); return; }
+    $("#cutChip").classList.add("hidden"); cstate.display = displayBlob; cstate.cut = true;
+    const img = $("#stageImg"); img.style.opacity = "0";
+    setTimeout(() => { img.src = url(displayBlob); $("#stage").classList.remove("framed"); $("#plate").style.display = "block"; img.style.opacity = "1"; }, 180);
+    saveDraft();
+  };
+  const onProg = (key, cur, total) => { if (cstate.token !== token) return;
+    if (String(key).startsWith("fetch") && total) setChip(`loading sticker AI… ${Math.round((cur/total)*100)}%`, false); else setChip("cutting out your food…", false); };
+  const attempt = (device) => window.__removeBg(blob, { model:"isnet_quint8", device, output:{ format:"image/png" }, progress:onProg });
+  const run = async () => {
+    let timer; const timeout = new Promise((_, rej) => timer = setTimeout(() => rej(new Error("timeout")), CUTOUT_TIMEOUT));
+    try {
+      let work;
+      try { work = await Promise.race([attempt("gpu"), timeout]); }
+      catch (g) { if (g.message === "timeout") throw g; work = await Promise.race([attempt("cpu"), timeout]); }
+      clearTimeout(timer); done(work, true);
+    } catch (e) { clearTimeout(timer); done(blob, false, e.message === "timeout" ? "took too long — kept the photo" : "couldn't cut out — kept the photo"); }
+  };
+  window.__cutoutReady ? run() : window.addEventListener("cutout-ready", run, { once: true });
+}
+function prewarmCutout() {
+  const go = async () => { if (!window.__removeBg) return;
+    try { const c = document.createElement("canvas"); c.width = c.height = 16; const b = await new Promise((r) => c.toBlob(r, "image/png")); await window.__removeBg(b, { model: "isnet_quint8" }); } catch {} };
+  window.__cutoutReady ? go() : window.addEventListener("cutout-ready", go, { once: true });
+}
+
+/* ---------- Claude vision: dish + macros ---------- */
+const FOOD_PROMPT = "This photo shows a meal the user just ate. Identify the dish and estimate the nutrition for the portion VISIBLE in the photo. Use the plate, bowl, hands, or utensils as scale cues for portion size. If there are multiple items, sum them into one total. Give realistic numbers for a typical recipe of this dish. Always return a best estimate even when unsure — set confidence to reflect how certain you are. Fiber is the hardest to see, so estimate it from the ingredients you'd expect.";
+function downscaleJpeg(blob, max = 768, q = 0.8) {
+  return new Promise((res) => { const img = new Image(); img.onload = () => {
+    let { width: w, height: h } = img; const s = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); c.toBlob((b) => res(b), "image/jpeg", q);
+  }; img.src = URL.createObjectURL(blob); });
+}
+const blobB64 = (blob) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.readAsDataURL(blob); });
+
+async function analyzeFood(rawBlob) {
+  const token = cstate.token, s = getSettings(), note = $("#analyzeNote");
+  if (!s.apiKey) { note.innerHTML = `Add an <span class="tap" id="goSettings">API key</span> (free via OpenRouter) to auto-fill name & macros — or type them in.`;
+    $("#goSettings").onclick = () => openSheet("settingsSheet"); return; }
+  note.innerHTML = `<span class="ring2" style="vertical-align:-2px"></span> reading your plate…`;
+  try {
+    const b64 = await blobB64(await downscaleJpeg(rawBlob));
+    const d = s.provider === "anthropic" ? await callAnthropic(s, b64) : await callOpenRouter(s, b64);
+    if (cstate.token !== token) return;
+    applyFoodResult(d);
+  } catch (e) {
+    if (cstate.token !== token) return;
+    console.warn("analyze:", e);
+    note.innerHTML = `Couldn't auto-read this one (${esc(e.message)}) — type the name & macros in.`;
+  }
+}
+function applyFoodResult(d) {
+  cstate.cuisine = d.cuisine || ""; cstate.confidence = d.confidence || null; cstate.portion = d.portion_note || "";
+  if (!$("#nameIn").value.trim() && d.dish) $("#nameIn").value = d.dish;
+  if (!$("#mKcal").value && d.calories != null) $("#mKcal").value = Math.round(d.calories);
+  if (!$("#mProtein").value && d.protein_g != null) $("#mProtein").value = Math.round(d.protein_g);
+  if (!$("#mFiber").value && d.fiber_g != null) $("#mFiber").value = Math.round(d.fiber_g);
+  const dot = d.confidence === "high" ? "🟢" : d.confidence === "medium" ? "🟡" : "🟠";
+  $("#analyzeNote").innerHTML = `${dot} ${esc(d.confidence || "")} confidence · ${esc(d.portion_note || "")} — tap any number to fix`;
+  saveDraft(); renderRings();
+}
+function parseLooseJSON(t) { if (!t) return null; try { return JSON.parse(t); } catch {} const m = t.match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch {} } return null; }
+
+/* Anthropic Claude — forced tool use for guaranteed structure */
+async function callAnthropic(s, b64) {
+  const body = { model:s.model, max_tokens:512,
+    tools:[{ name:"log_food", description:"Record the identified dish and its estimated nutrition for the visible portion.", strict:true,
+      input_schema:{ type:"object", additionalProperties:false,
+        required:["dish","cuisine","calories","protein_g","fiber_g","confidence","portion_note"],
+        properties:{ dish:{type:"string"}, cuisine:{type:"string"}, calories:{type:"integer"}, protein_g:{type:"number"}, fiber_g:{type:"number"}, confidence:{type:"string",enum:["low","medium","high"]}, portion_note:{type:"string"} } } }],
+    tool_choice:{ type:"tool", name:"log_food" },
+    messages:[{ role:"user", content:[ { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 } }, { type:"text", text:FOOD_PROMPT } ] }] };
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
+    headers:{ "content-type":"application/json", "x-api-key":s.apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" }, body:JSON.stringify(body) });
+  if (!r.ok) { let m = "HTTP " + r.status; try { const j = await r.json(); m = (j.error && j.error.message) || m; } catch {}
+    throw new Error(r.status === 401 ? "Claude key looks wrong — check Settings" : m); }
+  const j = await r.json(); const tu = (j.content || []).find((b) => b.type === "tool_use");
+  if (!tu) throw new Error("no result"); return tu.input;
+}
+
+/* OpenRouter — OpenAI-compatible, free vision models, browser-friendly */
+const JSON_SPEC = 'Respond with ONLY a JSON object (no markdown fences, no prose) with exactly these keys: "dish" (string), "cuisine" (string), "calories" (number, kcal for the visible portion), "protein_g" (number), "fiber_g" (number), "confidence" (one of "low","medium","high"), "portion_note" (short string).';
+async function callOpenRouter(s, b64) {
+  const body = { model:s.model, max_tokens:400, response_format:{ type:"json_object" },
+    messages:[{ role:"user", content:[ { type:"text", text:FOOD_PROMPT + "\n\n" + JSON_SPEC }, { type:"image_url", image_url:{ url:"data:image/jpeg;base64," + b64 } } ] }] };
+  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method:"POST",
+    headers:{ "content-type":"application/json", "authorization":"Bearer " + s.apiKey, "x-title":"Morsel" }, body:JSON.stringify(body) });
+  if (!r.ok) { let m = "HTTP " + r.status; try { const j = await r.json(); m = (j.error && (j.error.message || j.error)) || m; } catch {}
+    throw new Error(r.status === 401 ? "OpenRouter key looks wrong — check Settings" : r.status === 429 ? "rate-limited — wait a moment & retry" : String(m)); }
+  const j = await r.json();
+  let raw = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  if (Array.isArray(raw)) raw = raw.map((p) => p.text || "").join("");
+  const d = parseLooseJSON(raw || "");
+  if (!d) throw new Error("model returned no readable data — try another free model");
+  return d;
+}
+
+/* ---------- location ---------- */
+const FOOD_ICONS = { restaurant:"🍽️", cafe:"☕", fast_food:"🍔", bar:"🍸", pub:"🍺", ice_cream:"🍦", food_court:"🍱", bakery:"🥐" };
+function setLocQ(html, spin) { const q = $("#locQ"); q.classList.remove("hidden"); q.innerHTML = (spin ? '<span class="ring2"></span> ' : "") + html; }
+function lookupLocation() {
+  $("#locConfirmBlock").classList.add("hidden"); $("#locDone").classList.add("hidden");
+  if (!navigator.geolocation) return locManual("No location on this device — add it yourself");
+  setLocQ("finding where you are…", true);
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude: lat, longitude: lon } = pos.coords; cstate.coords = { lat, lon };
+    setLocQ("looking for places around you…", true);
+    try { const list = await overpass(lat, lon); cstate.nearby = list;
+      if (!list.length) return locManual("No food spots found nearby — add it yourself");
+      showConfirm(list[0], list.slice(1, 4));
+    } catch (e) { console.warn("overpass:", e); locManual("Couldn't reach the place finder — add it yourself"); }
+  }, (err) => { const msg = err.code === 1 ? "Location permission denied — allow it, or add the place"
+      : err.code === 3 ? "Location timed out — tap retry, or add the place" : "Couldn't get location — add the place";
+    locManual(msg, true); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+}
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+async function overpass(lat, lon) {
+  const q = `[out:json][timeout:20];( node["amenity"~"restaurant|cafe|fast_food|bar|pub|ice_cream|food_court"](around:300,${lat},${lon}); node["shop"~"bakery|confectionery|deli"](around:300,${lat},${lon}); ); out body 30;`;
+  let lastErr;
+  for (const ep of OVERPASS) { try {
+    const r = await fetch(ep, { method:"POST", body:"data=" + encodeURIComponent(q) }); if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    return (j.elements || []).filter((e) => e.tags && e.tags.name).map((e) => ({ name:e.tags.name, kind:e.tags.amenity || e.tags.shop,
+      cuisine:e.tags.cuisine ? e.tags.cuisine.replace(/_/g, " ").split(";")[0] : "", lat:e.lat, lon:e.lon, dist:dist(lat, lon, e.lat, e.lon) }))
+      .sort((a, b) => a.dist - b.dist).slice(0, 6);
+  } catch (e) { lastErr = e; } }
+  throw lastErr;
+}
+function dist(a, b, c, d) { const R = 6371000, t = (x) => x * Math.PI / 180;
+  const s = Math.sin(t(c - a) / 2) ** 2 + Math.cos(t(a)) * Math.cos(t(c)) * Math.sin(t(d - b) / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s))); }
+function showConfirm(top, others) {
+  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden");
+  $("#locName").textContent = top.name;
+  $("#locDist").textContent = `${FOOD_ICONS[top.kind] || "🍽️"} ${top.cuisine ? top.cuisine + " · " : ""}${top.dist} m away`;
+  $("#locName").dataset.lat = top.lat; $("#locName").dataset.lon = top.lon;
+  const ol = $("#optList"); ol.innerHTML = "";
+  others.forEach((o) => { const b = document.createElement("button"); b.className = "opt";
+    b.innerHTML = `<span class="oi">${FOOD_ICONS[o.kind] || "🍽️"}</span><span><span class="on">${esc(o.name)}</span><br/><span class="od">${o.dist} m away</span></span>`;
+    b.onclick = () => confirmPlace(o.name, o.lat, o.lon); ol.appendChild(b); });
+}
+$("#btnYes").onclick = () => { const n = $("#locName"); confirmPlace(n.textContent, +n.dataset.lat, +n.dataset.lon); };
+$("#btnNo").onclick = () => $("#others").classList.toggle("show");
+$("#addPlace").addEventListener("change", (e) => { const v = e.target.value.trim(); if (v) confirmPlace(v, cstate.coords && cstate.coords.lat, cstate.coords && cstate.coords.lon); });
+$("#changeLoc").onclick = () => { $("#locDone").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden"); cstate.place = null; };
+$("#retryLoc").onclick = () => { $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; lookupLocation(); };
+function confirmPlace(name, lat, lon) {
+  cstate.place = { name }; if (lat && lon) cstate.coords = { lat, lon };
+  $("#locConfirmBlock").classList.add("hidden"); $("#locQ").classList.add("hidden");
+  $("#locDone").classList.remove("hidden"); $("#doneName").textContent = name; saveDraft();
+}
+function locManual(msg, retry) {
+  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden");
+  $("#locName").textContent = msg; $("#locDist").textContent = ""; $("#others").classList.add("show");
+  $("#btnYes").style.display = "none"; $("#btnNo").style.display = "none"; $("#retryLoc").classList.toggle("hidden", !retry);
+}
+
+/* ---------- compose done / discard ---------- */
+function closeCompose() { composeOpen = false; $("#compose").classList.remove("show"); $("#cutChip").classList.add("hidden"); }
+$("#doneBtn").onclick = async () => { await saveDraft(); closeCompose(); await renderBook(); go("book"); };
+$("#discardBtn").onclick = async () => { cstate.token = Symbol(); if (cstate.id) await DB.del(cstate.id); closeCompose(); await renderBook(); go("cam"); };
+
+/* ===================== BOOK ===================== */
+let cache = [];
+async function renderBook() {
+  cache = await DB.all();
+  $("#countChip").textContent = cache.length + (cache.length === 1 ? " morsel" : " morsels");
+  const feed = $("#feed"); feed.innerHTML = "";
+  $("#emptyBook").classList.toggle("hidden", cache.length > 0);
+  cache.forEach((e) => {
+    const card = document.createElement("div"); card.className = "m-card" + (e.cut ? " cut" : ""); card.dataset.id = e.id;
+    const dishHtml = e.dish ? `<div class="dish">${esc(e.dish)}</div>` : `<div class="dish unnamed">Tap to name…</div>`;
+    const kc = (e.kcal != null) ? `<div class="kc">${Math.round(e.kcal)} kcal</div>` : "";
+    const sub = `${e.place ? `<span class="pin">📍 ${esc(e.place)}</span> · ` : ""}${timeAgo(e.ts)}`;
+    card.innerHTML = `<button class="del" data-id="${e.id}">✕</button>
+      <div class="well"><img class="${e.cut ? "cut" : "full"}" src="${url(e.blob)}" alt="${esc(e.dish || "morsel")}"/></div>
+      ${dishHtml}${kc}<div class="sub">${sub}</div>`;
+    card.onclick = (ev) => { if (ev.target.closest(".del")) return; openComposeForEdit(e); };
+    feed.appendChild(card);
+  });
+  feed.querySelectorAll(".del").forEach((b) => b.onclick = async (ev) => { ev.stopPropagation();
+    if (confirm("Remove this morsel?")) { await DB.del(b.dataset.id); await renderBook(); renderRings(); } });
+  renderRings();
+}
+function openComposeForEdit(e) {
+  Object.assign(cstate, { id:e.id, ts:e.ts, token:Symbol(), raw:e.blob, display:e.blob, cut:e.cut,
+    cuisine:e.cuisine || "", confidence:e.confidence || null, place:e.place ? { name:e.place } : null,
+    coords:(e.lat && e.lon) ? { lat:e.lat, lon:e.lon } : null, nearby:[] });
+  composeOpen = true;
+  $("#composeTitle").textContent = "Edit card";
+  $("#nameIn").value = e.dish || ""; $("#mKcal").value = e.kcal != null ? Math.round(e.kcal) : "";
+  $("#mProtein").value = e.protein != null ? Math.round(e.protein) : ""; $("#mFiber").value = e.fiber != null ? Math.round(e.fiber) : "";
+  $("#analyzeNote").innerHTML = "";
+  $("#cutChip").classList.add("hidden");
+  const img = $("#stageImg"); img.style.opacity = "1"; img.src = url(e.blob);
+  $("#stage").classList.toggle("framed", !e.cut); $("#plate").style.display = e.cut ? "block" : "none";
+  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.add("hidden");
+  if (e.place) { $("#locDone").classList.remove("hidden"); $("#doneName").textContent = e.place; }
+  else { $("#locDone").classList.add("hidden"); lookupLocation(); }
+  $("#compose").classList.add("show");
+}
+
+/* ===================== MAP ===================== */
+let lmap, layer;
+function ensureMap() { if (lmap) return;
+  lmap = L.map("mapEl", { zoomControl: true }).setView([20, 78], 4);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: "anonymous", attribution: "© OpenStreetMap" }).addTo(lmap);
+  layer = L.layerGroup().addTo(lmap); }
+function renderMap() {
+  ensureMap(); setTimeout(() => lmap.invalidateSize(), 60); layer.clearLayers();
+  const pts = cache.filter((e) => e.lat && e.lon); $("#emptyMap").classList.toggle("hidden", pts.length > 0);
+  if (!pts.length) return; const bounds = [];
+  pts.forEach((e) => {
+    const icon = L.divIcon({ className:"", html:`<div class="map-pin"><img src="${url(e.blob)}"/></div>`, iconSize:[46,46], iconAnchor:[23,23] });
+    const mac = (e.kcal != null) ? `<div class="pmac">${Math.round(e.kcal)} kcal${e.protein != null ? " · "+Math.round(e.protein)+"g protein" : ""}</div>` : "";
+    L.marker([e.lat, e.lon], { icon }).addTo(layer).bindPopup(
+      `<div class="pop"><img class="pi" src="${url(e.blob)}"/><div class="pd">${esc(e.dish || "Morsel")}</div>${mac}<div class="pm">${e.place ? esc(e.place) + " · " : ""}${timeAgo(e.ts)}</div></div>`);
+    bounds.push([e.lat, e.lon]);
+  });
+  bounds.length === 1 ? lmap.setView(bounds[0], 16) : lmap.fitBounds(bounds, { padding:[50,50], maxZoom:16 });
+}
+
+/* ===================== SHEETS ===================== */
+function openSheet(id) { if (id === "settingsSheet") loadSettingsForm(); if (id === "todaySheet") renderRings(); $("#" + id).classList.add("show"); }
+function closeSheet(id) { $("#" + id).classList.remove("show"); }
+$("#gearBtn").onclick = () => openSheet("settingsSheet");
+$("#ringsBar").onclick = () => openSheet("todaySheet");
+document.querySelectorAll("[data-close]").forEach((b) => b.onclick = () => closeSheet(b.dataset.close));
+document.querySelectorAll(".sheet").forEach((sh) => sh.addEventListener("click", (e) => { if (e.target === sh) sh.classList.remove("show"); }));
+function applyProviderUI(p) {
+  const or = p === "openrouter";
+  $("#keyLabel").textContent = or ? "OpenRouter API key" : "Claude API key";
+  $("#setKey").placeholder = or ? "sk-or-..." : "sk-ant-...";
+  $("#keyHint").innerHTML = or ? 'Free key at <b>openrouter.ai/keys</b> — 1-min signup, no card.' : 'From <b>console.anthropic.com</b> — paid, needs credits.';
+  $("#modelHint").innerHTML = or ? 'Free vision models end in <b>:free</b> (default is free Gemini Flash). More at openrouter.ai/models.' : 'claude-sonnet-4-6 · claude-haiku-4-5 · claude-opus-4-8';
+}
+function loadSettingsForm() { const s = getSettings();
+  $("#setProvider").value = s.provider; applyProviderUI(s.provider);
+  $("#setKey").value = s.apiKey; $("#setModel").value = s.model;
+  $("#setKcal").value = s.goalKcal; $("#setProtein").value = s.goalProtein; $("#setFiber").value = s.goalFiber; }
+$("#setProvider").addEventListener("change", (e) => { const p = e.target.value; applyProviderUI(p);
+  $("#setModel").value = p === "openrouter" ? OR_DEFAULT_MODEL : CLAUDE_DEFAULT_MODEL; });
+$("#saveSettings").onclick = () => {
+  setSettings({ provider:$("#setProvider").value, apiKey:$("#setKey").value.trim(), model:$("#setModel").value.trim(),
+    goalKcal:+$("#setKcal").value || 2000, goalProtein:+$("#setProtein").value || 120, goalFiber:+$("#setFiber").value || 30 });
+  closeSheet("settingsSheet"); renderRings(); toast("Saved");
+};
+
+/* ===================== NAV ===================== */
+async function go(view) {
+  if (composeOpen) { await saveDraft(); closeCompose(); await renderBook(); }
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  $("#" + view).classList.add("active");
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.go === view));
+  if (view === "cam") startCamera(); else stopCamera();
+  if (view === "map") renderMap();
+}
+// the round Snap button is the only thing that captures: shoot if already on camera, else just go there
+function snapTab() { if ($("#cam").classList.contains("active") && !composeOpen) captureFrame(); else go("cam"); }
+document.querySelectorAll("[data-go]").forEach((el) => el.onclick = () => (el.classList.contains("shoot") ? snapTab() : go(el.dataset.go)));
+
+/* ===================== BOOT ===================== */
+(async () => { await DB.open(); await renderBook(); startCamera(); prewarmCutout(); })();
+</script>
+</body>
+</html>
