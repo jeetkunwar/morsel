@@ -534,7 +534,8 @@ async function analyzeFood(rawBlob) {
   } catch (e) {
     if (cstate.token !== token) return;
     console.warn("analyze:", e);
-    note.innerHTML = `Couldn't auto-read this one (${esc(e.message)}) — type the name & macros in.`;
+    note.innerHTML = `Couldn't auto-read (${esc(e.message)}). <span class="tap" id="retryAnalyze">↻ Retry</span> or type it in.`;
+    const rb = $("#retryAnalyze"); if (rb) rb.onclick = () => analyzeFood(cstate.raw);
   }
 }
 function applyFoodResult(d) {
@@ -568,19 +569,33 @@ async function callAnthropic(s, b64) {
 
 /* OpenRouter — OpenAI-compatible, free vision models, browser-friendly */
 const JSON_SPEC = 'Respond with ONLY a JSON object (no markdown fences, no prose) with exactly these keys: "dish" (string), "cuisine" (string), "calories" (number, kcal for the visible portion), "protein_g" (number), "fiber_g" (number), "confidence" (one of "low","medium","high"), "portion_note" (short string).';
-async function callOpenRouter(s, b64) {
-  const body = { model:s.model, max_tokens:400, response_format:{ type:"json_object" },
+// chain of free vision models — if one is busy/retired, fall through to the next
+const OR_FALLBACKS = ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"];
+async function orOnce(model, key, b64) {
+  const body = { model, max_tokens:400, response_format:{ type:"json_object" },
     messages:[{ role:"user", content:[ { type:"text", text:FOOD_PROMPT + "\n\n" + JSON_SPEC }, { type:"image_url", image_url:{ url:"data:image/jpeg;base64," + b64 } } ] }] };
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method:"POST",
-    headers:{ "content-type":"application/json", "authorization":"Bearer " + s.apiKey, "x-title":"Morsel" }, body:JSON.stringify(body) });
+    headers:{ "content-type":"application/json", "authorization":"Bearer " + key, "x-title":"Morsel" }, body:JSON.stringify(body) });
   if (!r.ok) { let m = "HTTP " + r.status; try { const j = await r.json(); m = (j.error && (j.error.message || j.error)) || m; } catch {}
-    throw new Error(r.status === 401 ? "OpenRouter key looks wrong — check Settings" : r.status === 429 ? "rate-limited — wait a moment & retry" : String(m)); }
+    const e = new Error(m); e.status = r.status; throw e; }
   const j = await r.json();
   let raw = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   if (Array.isArray(raw)) raw = raw.map((p) => p.text || "").join("");
   const d = parseLooseJSON(raw || "");
-  if (!d) throw new Error("model returned no readable data — try another free model");
+  if (!d) { const e = new Error("unreadable reply"); e.status = 422; throw e; }
   return d;
+}
+async function callOpenRouter(s, b64) {
+  const models = [s.model, ...OR_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i); // user's pick first, dedup
+  let lastErr;
+  for (const model of models) {
+    try { return await orOnce(model, s.apiKey, b64); }
+    catch (e) { lastErr = e;
+      if (e.status === 401) throw new Error("OpenRouter key looks wrong — check Settings");
+      await new Promise((r) => setTimeout(r, 350)); // 429 / busy / retired → try the next free model
+    }
+  }
+  throw new Error("all free models busy right now — retry in a moment");
 }
 
 /* ---------- location ---------- */
