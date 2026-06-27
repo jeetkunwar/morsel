@@ -616,18 +616,16 @@ function lookupLocation() {
       : err.code === 3 ? "Location timed out — tap retry, or add the place" : "Couldn't get location — add the place";
     locManual(msg, true); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
 }
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+const OVERPASS = ["https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter"];
 async function overpass(lat, lon) {
-  const q = `[out:json][timeout:20];( node["amenity"~"restaurant|cafe|fast_food|bar|pub|ice_cream|food_court"](around:300,${lat},${lon}); node["shop"~"bakery|confectionery|deli"](around:300,${lat},${lon}); ); out body 30;`;
-  let lastErr;
-  for (const ep of OVERPASS) { try {
-    const r = await fetch(ep, { method:"POST", body:"data=" + encodeURIComponent(q) }); if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    return (j.elements || []).filter((e) => e.tags && e.tags.name).map((e) => ({ name:e.tags.name, kind:e.tags.amenity || e.tags.shop,
-      cuisine:e.tags.cuisine ? e.tags.cuisine.replace(/_/g, " ").split(";")[0] : "", lat:e.lat, lon:e.lon, dist:dist(lat, lon, e.lat, e.lon) }))
-      .sort((a, b) => a.dist - b.dist).slice(0, 6);
-  } catch (e) { lastErr = e; } }
-  throw lastErr;
+  const q = `[out:json][timeout:12];( node["amenity"~"restaurant|cafe|fast_food|bar|pub|ice_cream|food_court"](around:250,${lat},${lon}); node["shop"~"bakery|confectionery|deli"](around:250,${lat},${lon}); ); out body 25;`;
+  const body = "data=" + encodeURIComponent(q);
+  const fetchOne = (ep) => { const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 9000);
+    return fetch(ep, { method:"POST", body, signal:ctrl.signal }).then((r) => { clearTimeout(t); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); };
+  const j = await Promise.any(OVERPASS.map(fetchOne)); // race the mirrors — fastest one wins
+  return (j.elements || []).filter((e) => e.tags && e.tags.name).map((e) => ({ name:e.tags.name, kind:e.tags.amenity || e.tags.shop,
+    cuisine:e.tags.cuisine ? e.tags.cuisine.replace(/_/g, " ").split(";")[0] : "", lat:e.lat, lon:e.lon, dist:dist(lat, lon, e.lat, e.lon) }))
+    .sort((a, b) => a.dist - b.dist).slice(0, 6);
 }
 function dist(a, b, c, d) { const R = 6371000, t = (x) => x * Math.PI / 180;
   const s = Math.sin(t(c - a) / 2) ** 2 + Math.cos(t(a)) * Math.cos(t(c)) * Math.sin(t(d - b) / 2) ** 2;
