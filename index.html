@@ -337,8 +337,8 @@
 const $ = (s) => document.querySelector(s);
 
 /* ---------- settings ---------- */
-const DEFAULT_SETTINGS = { provider:"openrouter", apiKey:"", model:"google/gemini-2.0-flash-exp:free", goalKcal:2000, goalProtein:120, goalFiber:30 };
-const OR_DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free", CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_SETTINGS = { provider:"openrouter", apiKey:"", model:"google/gemma-4-31b-it:free", goalKcal:2000, goalProtein:120, goalFiber:30 };
+const OR_DEFAULT_MODEL = "google/gemma-4-31b-it:free", CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6";
 function getSettings() { let saved = {}; try { saved = JSON.parse(localStorage.getItem("morsel_settings") || "{}"); } catch {}
   const s = { ...DEFAULT_SETTINGS, ...saved };
   if (!saved.provider) s.provider = (saved.model || s.model || "").startsWith("claude") ? "anthropic" : "openrouter"; // migrate older saves by raw model
@@ -720,7 +720,7 @@ function applyProviderUI(p) {
   $("#keyLabel").textContent = or ? "OpenRouter API key" : "Claude API key";
   $("#setKey").placeholder = or ? "sk-or-..." : "sk-ant-...";
   $("#keyHint").innerHTML = or ? 'Free key at <b>openrouter.ai/keys</b> — 1-min signup, no card.' : 'From <b>console.anthropic.com</b> — paid, needs credits.';
-  $("#modelHint").innerHTML = or ? 'Free vision models end in <b>:free</b> (default is free Gemini Flash). More at openrouter.ai/models.' : 'claude-sonnet-4-6 · claude-haiku-4-5 · claude-opus-4-8';
+  $("#modelHint").innerHTML = or ? 'Free vision models end in <b>:free</b> (default is free Gemma). Free list rotates — see openrouter.ai/models.' : 'claude-sonnet-4-6 · claude-haiku-4-5 · claude-opus-4-8';
 }
 function loadSettingsForm() { const s = getSettings();
   $("#setProvider").value = s.provider; applyProviderUI(s.provider);
