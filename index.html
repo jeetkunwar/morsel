@@ -26,7 +26,7 @@
   .screen { position:absolute; inset:0; display:none; flex-direction:column; }
   .screen.active { display:flex; }
   .scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
-            padding:calc(16px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+            padding:calc(64px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
 
   .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
   .brand { font-weight:800; font-size:24px; letter-spacing:-.5px; } .brand .dot { color:var(--clay); }
@@ -47,9 +47,9 @@
   .vf-top .wm { color:#fff; font-weight:800; font-size:19px; letter-spacing:-.4px; text-shadow:0 1px 3px rgba(0,0,0,.4); }
   .gear { width:38px; height:38px; border-radius:50%; border:none; background:rgba(255,255,255,.18);
           backdrop-filter:blur(6px); color:#fff; font-size:18px; }
-  .rings-bar { position:absolute; top:calc(60px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
-               z-index:3; display:flex; gap:6px; background:rgba(20,19,15,.5); backdrop-filter:blur(8px);
-               border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:8px 12px; }
+  .rings-bar { position:absolute; top:calc(10px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+               z-index:25; display:flex; gap:16px; background:rgba(20,19,15,.5); backdrop-filter:blur(8px);
+               border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:8px 16px; }
   .rings-bar .ring-u { display:flex; flex-direction:column; align-items:center; gap:1px; }
   .rings-bar .ring-u .lbl { font-size:9px; font-weight:700; color:rgba(255,255,255,.75); letter-spacing:.3px; }
   .vf-hint { position:absolute; left:50%; bottom:120px; transform:translateX(-50%); color:#fff; font-size:13px;
@@ -97,6 +97,7 @@
   .analyze-note .tap { color:var(--clay-deep); font-weight:700; text-decoration:underline; }
 
   .loc-card { margin-top:18px; background:var(--card); border:1.5px solid var(--line-2); border-radius:18px; padding:15px; box-shadow:0 6px 16px var(--shadow); }
+  .pin-trigger { width:100%; padding:13px; border:1.5px dashed var(--line-2); border-radius:13px; background:#fff; font-family:inherit; font-weight:700; font-size:14.5px; color:var(--clay-deep); }
   .loc-q { font-size:13px; color:var(--ink-soft); font-weight:700; display:flex; align-items:center; gap:8px; }
   .loc-name { font-size:20px; font-weight:800; margin:8px 0 2px; letter-spacing:-.3px; }
   .loc-dist { font-size:12px; color:var(--ink-soft); }
@@ -192,7 +193,6 @@
         <div class="wm">Morsel<span style="color:var(--clay)">.</span></div>
         <button class="gear" id="gearBtn">⚙</button>
       </div>
-      <div class="rings-bar" id="ringsBar"></div>
       <div class="vf-hint">point at what you're eating</div>
     </div>
     <input type="file" id="fileIn" accept="image/*" capture="environment" class="hidden" />
@@ -216,12 +216,12 @@
 
   <!-- ===== MAP ===== -->
   <section class="screen" id="map">
-    <div style="flex:none; padding:calc(16px + env(safe-area-inset-top)) 16px 8px;">
-      <div class="head"><div><div class="brand">Your map</div><div class="brand-sub">where you ate what</div></div></div>
+    <div style="flex:none; padding:calc(64px + env(safe-area-inset-top)) 16px 8px;">
+      <div class="head"><div><div class="brand">Foodmap</div><div class="brand-sub">the dishes you pinned</div></div></div>
     </div>
     <div id="mapEl"></div>
-    <div class="empty hidden" id="emptyMap" style="position:absolute;top:40%;left:0;right:0;">
-      <div class="big">🗺️</div><h2>Map's empty</h2><p>Confirm a place when you add a<br/>morsel and a pin lands here.</p>
+    <div class="empty hidden" id="emptyMap" style="position:absolute;top:42%;left:0;right:0;">
+      <div class="big">🗺️</div><h2>Foodmap's empty</h2><p>Tap <b>📍 Pin to foodmap</b> on a morsel<br/>worth remembering — it lands here.</p>
     </div>
   </section>
 
@@ -245,27 +245,31 @@
       <div class="macro-row">
         <div class="macro kcal"><input id="mKcal" inputmode="numeric" placeholder="—" /><div class="mlbl">kcal</div></div>
         <div class="macro protein"><input id="mProtein" inputmode="numeric" placeholder="—" /><div class="mlbl">protein g</div></div>
-        <div class="macro fiber"><input id="mFiber" inputmode="numeric" placeholder="—" /><div class="mlbl">fiber g</div></div>
       </div>
       <div class="analyze-note" id="analyzeNote"></div>
 
       <div class="loc-card" id="locCard">
-        <div class="loc-q" id="locQ"><span class="ring2"></span> finding where you are…</div>
-        <div id="locConfirmBlock" class="hidden">
-          <div class="loc-name" id="locName">—</div>
-          <div class="loc-dist" id="locDist"></div>
-          <div class="loc-actions">
-            <button class="btn-yes" id="btnYes">✓ Yes, here</button>
-            <button class="btn-no" id="btnNo">Not here</button>
-          </div>
-          <div class="others" id="others">
-            <span class="lbl">Pick the right one:</span>
-            <div id="optList"></div>
-            <div class="add-place"><input id="addPlace" placeholder="＋ Add a place by name" /></div>
-            <button class="btn-no hidden" id="retryLoc" style="margin-top:2px">↻ Retry location</button>
+        <button class="pin-trigger" id="pinTrigger">📍 Pin this to my foodmap</button>
+        <div id="locFlow" class="hidden">
+          <div class="loc-q" id="locQ"><span class="ring2"></span> finding where you are…</div>
+          <div id="locConfirmBlock" class="hidden">
+            <div class="loc-name" id="locName">—</div>
+            <div class="loc-dist" id="locDist"></div>
+            <div class="loc-actions">
+              <button class="btn-yes" id="btnYes">✓ Yes, here</button>
+              <button class="btn-no" id="btnNo">Not here</button>
+            </div>
+            <div class="others" id="others">
+              <span class="lbl">Pick the right one:</span>
+              <div id="optList"></div>
+              <div class="add-place"><input id="addPlace" placeholder="＋ Add a place by name" /></div>
+              <button class="btn-no hidden" id="retryLoc" style="margin-top:2px">↻ Retry location</button>
+            </div>
           </div>
         </div>
-        <div id="locDone" class="hidden"><div class="loc-confirmed">📍 <span id="doneName"></span> <button class="btn-no" id="changeLoc" style="margin-left:auto;padding:6px 12px">change</button></div></div>
+        <div id="locDone" class="hidden"><div class="loc-confirmed">📍 <span id="doneName"></span>
+          <button class="btn-no" id="changeLoc" style="margin-left:auto;padding:6px 10px">change</button>
+          <button class="btn-no" id="unpinBtn" style="padding:6px 10px">unpin</button></div></div>
       </div>
       <div class="autosave-note">✓ saved to your book — tweak anything, it keeps itself</div>
     </div>
@@ -314,13 +318,13 @@
       <div class="goals-grid">
         <div class="fld" style="margin-top:0"><label>kcal</label><input id="setKcal" inputmode="numeric" /></div>
         <div class="fld" style="margin-top:0"><label>protein g</label><input id="setProtein" inputmode="numeric" /></div>
-        <div class="fld" style="margin-top:0"><label>fiber g</label><input id="setFiber" inputmode="numeric" /></div>
       </div>
       <button class="save-settings" id="saveSettings">Save</button>
       <div class="note">🔒 Your API key is stored <b>only on this device</b> (this browser) and is sent straight to your chosen provider when you snap — there's no server in between. Don't enter it on a shared/public device. Photos and macros never leave your phone except the single image sent to estimate nutrition.</div>
     </div>
   </div>
 
+  <div class="rings-bar" id="ringsBar"></div>
   <div id="toast"></div>
 </div>
 
@@ -394,12 +398,12 @@ function renderRings() {
   const s = getSettings(), t = todayTotals();
   const bar = $("#ringsBar");
   bar.innerHTML = [
-    ["kcal", t.kcal, s.goalKcal, "var(--kcal)"], ["protein", t.protein, s.goalProtein, "var(--protein)"], ["fiber", t.fiber, s.goalFiber, "var(--fiber)"],
+    ["kcal", t.kcal, s.goalKcal, "var(--kcal)"], ["protein", t.protein, s.goalProtein, "var(--protein)"],
   ].map(([lbl, v, g, col]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, false, v, 44, 5)}<span class="lbl">${lbl}</span></div>`).join("");
   // today sheet (bigger)
   const big = $("#todayRings");
   if (big) big.innerHTML = [
-    ["calories", t.kcal, s.goalKcal, "var(--kcal)", "kcal"], ["protein", t.protein, s.goalProtein, "var(--protein)", "g"], ["fiber", t.fiber, s.goalFiber, "var(--fiber)", "g"],
+    ["calories", t.kcal, s.goalKcal, "var(--kcal)", "kcal"], ["protein", t.protein, s.goalProtein, "var(--protein)", "g"],
   ].map(([lbl, v, g, col, u]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, true, v, 84, 8)}<span class="lbl">${lbl}</span><span class="goal">/ ${g}${u}</span></div>`).join("");
   const n = $("#todayNote");
   if (n) n.textContent = cache.filter((e) => isToday(e.ts)).length + " logged today";
@@ -442,14 +446,12 @@ let composeOpen = false;
 
 async function openCompose(rawBlob) {
   Object.assign(cstate, { id:"m_"+Date.now(), ts:Date.now(), token:Symbol(), raw:rawBlob, display:rawBlob, cut:false,
-    dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, nearby:[] });
+    dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, pinned:false, nearby:[] });
   composeOpen = true;
   $("#composeTitle").textContent = "New morsel";
-  $("#nameIn").value = ""; $("#mKcal").value = ""; $("#mProtein").value = ""; $("#mFiber").value = "";
+  $("#nameIn").value = ""; $("#mKcal").value = ""; $("#mProtein").value = "";
   $("#analyzeNote").innerHTML = "";
-  $("#locQ").classList.remove("hidden"); $("#locConfirmBlock").classList.add("hidden");
-  $("#locDone").classList.add("hidden"); $("#others").classList.remove("show");
-  $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; $("#optList").innerHTML = ""; $("#addPlace").value = "";
+  resetPinUI();
 
   $("#compose").classList.add("show");
   $("#stage").classList.add("framed"); $("#stageImg").style.opacity = "1"; $("#stageImg").src = url(rawBlob); $("#plate").style.display = "none";
@@ -458,7 +460,13 @@ async function openCompose(rawBlob) {
   toast("Saved to your book ✓");   // it's logged immediately — sticker & macros fill in after
   runCutout(rawBlob);
   analyzeFood(rawBlob);
-  lookupLocation();
+  // location is only fetched when the user taps "Pin to foodmap" — no lag for un-pinned bites
+}
+function resetPinUI() {
+  $("#pinTrigger").classList.remove("hidden"); $("#pinTrigger").textContent = "📍 Pin this to my foodmap";
+  $("#locFlow").classList.add("hidden"); $("#locDone").classList.add("hidden");
+  $("#locConfirmBlock").classList.add("hidden"); $("#others").classList.remove("show");
+  $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; $("#optList").innerHTML = ""; $("#addPlace").value = "";
 }
 
 let saveTimer;
@@ -466,13 +474,13 @@ async function saveDraft() {
   if (!cstate.id || !cstate.display) return;
   await DB.put({ id:cstate.id, ts:cstate.ts, blob:cstate.display, cut:cstate.cut,
     dish:$("#nameIn").value.trim(), cuisine:cstate.cuisine,
-    kcal:numOrNull($("#mKcal").value), protein:numOrNull($("#mProtein").value), fiber:numOrNull($("#mFiber").value),
-    confidence:cstate.confidence, place:cstate.place ? cstate.place.name : null,
+    kcal:numOrNull($("#mKcal").value), protein:numOrNull($("#mProtein").value), fiber:cstate.fiber,
+    confidence:cstate.confidence, pinned:!!cstate.pinned, place:cstate.place ? cstate.place.name : null,
     lat:cstate.coords ? cstate.coords.lat : null, lon:cstate.coords ? cstate.coords.lon : null });
 }
 const numOrNull = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
 const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveDraft(); renderRings(); }, 350); };
-["#nameIn", "#mKcal", "#mProtein", "#mFiber"].forEach((id) => $(id).addEventListener("input", saveSoon));
+["#nameIn", "#mKcal", "#mProtein"].forEach((id) => $(id).addEventListener("input", saveSoon));
 
 /* ---------- cutout ---------- */
 function setChip(text, isErr) { const c = $("#cutChip"); c.classList.remove("hidden"); c.classList.toggle("err", !!isErr);
@@ -543,7 +551,7 @@ function applyFoodResult(d) {
   if (!$("#nameIn").value.trim() && d.dish) $("#nameIn").value = d.dish;
   if (!$("#mKcal").value && d.calories != null) $("#mKcal").value = Math.round(d.calories);
   if (!$("#mProtein").value && d.protein_g != null) $("#mProtein").value = Math.round(d.protein_g);
-  if (!$("#mFiber").value && d.fiber_g != null) $("#mFiber").value = Math.round(d.fiber_g);
+  if (cstate.fiber == null && d.fiber_g != null) cstate.fiber = Math.round(d.fiber_g);
   const dot = d.confidence === "high" ? "🟢" : d.confidence === "medium" ? "🟡" : "🟠";
   $("#analyzeNote").innerHTML = `${dot} ${esc(d.confidence || "")} confidence · ${esc(d.portion_note || "")} — tap any number to fix`;
   saveDraft(); renderRings();
@@ -643,11 +651,14 @@ function showConfirm(top, others) {
 $("#btnYes").onclick = () => { const n = $("#locName"); confirmPlace(n.textContent, +n.dataset.lat, +n.dataset.lon); };
 $("#btnNo").onclick = () => $("#others").classList.toggle("show");
 $("#addPlace").addEventListener("change", (e) => { const v = e.target.value.trim(); if (v) confirmPlace(v, cstate.coords && cstate.coords.lat, cstate.coords && cstate.coords.lon); });
-$("#changeLoc").onclick = () => { $("#locDone").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden"); cstate.place = null; };
+$("#pinTrigger").onclick = () => { $("#pinTrigger").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); lookupLocation(); };
+$("#changeLoc").onclick = () => { $("#locDone").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); cstate.place = null; lookupLocation(); };
+$("#unpinBtn").onclick = () => { cstate.pinned = false; cstate.place = null; cstate.coords = null; resetPinUI(); saveDraft(); };
 $("#retryLoc").onclick = () => { $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; lookupLocation(); };
 function confirmPlace(name, lat, lon) {
   cstate.place = { name }; if (lat && lon) cstate.coords = { lat, lon };
-  $("#locConfirmBlock").classList.add("hidden"); $("#locQ").classList.add("hidden");
+  cstate.pinned = true;
+  $("#locFlow").classList.add("hidden"); $("#pinTrigger").classList.add("hidden");
   $("#locDone").classList.remove("hidden"); $("#doneName").textContent = name; saveDraft();
 }
 function locManual(msg, retry) {
@@ -685,19 +696,18 @@ async function renderBook() {
 }
 function openComposeForEdit(e) {
   Object.assign(cstate, { id:e.id, ts:e.ts, token:Symbol(), raw:e.blob, display:e.blob, cut:e.cut,
-    cuisine:e.cuisine || "", confidence:e.confidence || null, place:e.place ? { name:e.place } : null,
-    coords:(e.lat && e.lon) ? { lat:e.lat, lon:e.lon } : null, nearby:[] });
+    cuisine:e.cuisine || "", fiber:(e.fiber != null ? e.fiber : null), confidence:e.confidence || null,
+    place:e.place ? { name:e.place } : null, coords:(e.lat && e.lon) ? { lat:e.lat, lon:e.lon } : null, pinned:!!e.pinned, nearby:[] });
   composeOpen = true;
   $("#composeTitle").textContent = "Edit card";
   $("#nameIn").value = e.dish || ""; $("#mKcal").value = e.kcal != null ? Math.round(e.kcal) : "";
-  $("#mProtein").value = e.protein != null ? Math.round(e.protein) : ""; $("#mFiber").value = e.fiber != null ? Math.round(e.fiber) : "";
+  $("#mProtein").value = e.protein != null ? Math.round(e.protein) : "";
   $("#analyzeNote").innerHTML = "";
   $("#cutChip").classList.add("hidden");
   const img = $("#stageImg"); img.style.opacity = "1"; img.src = url(e.blob);
   $("#stage").classList.toggle("framed", !e.cut); $("#plate").style.display = e.cut ? "block" : "none";
-  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.add("hidden");
-  if (e.place) { $("#locDone").classList.remove("hidden"); $("#doneName").textContent = e.place; }
-  else { $("#locDone").classList.add("hidden"); lookupLocation(); }
+  resetPinUI();
+  if (e.pinned && e.place) { $("#pinTrigger").classList.add("hidden"); $("#locDone").classList.remove("hidden"); $("#doneName").textContent = e.place; }
   $("#compose").classList.add("show");
 }
 
@@ -709,7 +719,7 @@ function ensureMap() { if (lmap) return;
   layer = L.layerGroup().addTo(lmap); }
 function renderMap() {
   ensureMap(); setTimeout(() => lmap.invalidateSize(), 60); layer.clearLayers();
-  const pts = cache.filter((e) => e.lat && e.lon); $("#emptyMap").classList.toggle("hidden", pts.length > 0);
+  const pts = cache.filter((e) => e.pinned && e.lat && e.lon); $("#emptyMap").classList.toggle("hidden", pts.length > 0);
   if (!pts.length) return; const bounds = [];
   pts.forEach((e) => {
     const icon = L.divIcon({ className:"", html:`<div class="map-pin"><img src="${url(e.blob)}"/></div>`, iconSize:[46,46], iconAnchor:[23,23] });
@@ -738,12 +748,12 @@ function applyProviderUI(p) {
 function loadSettingsForm() { const s = getSettings();
   $("#setProvider").value = s.provider; applyProviderUI(s.provider);
   $("#setKey").value = s.apiKey; $("#setModel").value = s.model;
-  $("#setKcal").value = s.goalKcal; $("#setProtein").value = s.goalProtein; $("#setFiber").value = s.goalFiber; }
+  $("#setKcal").value = s.goalKcal; $("#setProtein").value = s.goalProtein; }
 $("#setProvider").addEventListener("change", (e) => { const p = e.target.value; applyProviderUI(p);
   $("#setModel").value = p === "openrouter" ? OR_DEFAULT_MODEL : CLAUDE_DEFAULT_MODEL; });
 $("#saveSettings").onclick = () => {
   setSettings({ provider:$("#setProvider").value, apiKey:$("#setKey").value.trim(), model:$("#setModel").value.trim(),
-    goalKcal:+$("#setKcal").value || 2000, goalProtein:+$("#setProtein").value || 120, goalFiber:+$("#setFiber").value || 30 });
+    goalKcal:+$("#setKcal").value || 2000, goalProtein:+$("#setProtein").value || 120 });
   closeSheet("settingsSheet"); renderRings(); toast("Saved");
 };
 
