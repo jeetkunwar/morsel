@@ -80,6 +80,10 @@
   .ring2 { width:13px; height:13px; border:2.5px solid var(--line-2); border-top-color:var(--clay);
            border-radius:50%; animation:sp .8s linear infinite; display:inline-block; }
   @keyframes sp { to{transform:rotate(360deg);} }
+  @keyframes cutReveal { 0%{opacity:0;transform:scale(.8) translateY(10px);} 60%{opacity:1;transform:scale(1.04) translateY(0);} 100%{transform:scale(1);} }
+  .stage img.revealing { animation:cutReveal .6s cubic-bezier(.2,.85,.3,1.1); }
+  @keyframes ringFill { from{stroke-dashoffset:var(--c);} to{stroke-dashoffset:var(--o);} }
+  @keyframes pinDrop { 0%{opacity:0;transform:translateY(-18px) scale(.5);} 65%{transform:translateY(2px) scale(1.06);} 100%{opacity:1;transform:none;} }
 
   .name-in { width:100%; text-align:center; border:none; background:transparent; font-family:inherit;
              font-weight:800; font-size:26px; color:var(--ink); letter-spacing:-.5px; margin-top:8px; }
@@ -149,7 +153,7 @@
   .pstat + .pstat { border-left:1px solid var(--line); }
   .leaflet-popup-content { font-family:inherit; margin:10px; }
   .map-pin { width:46px; height:46px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,.35);
-             overflow:hidden; background:var(--bg-2); display:grid; place-items:center; }
+             overflow:hidden; background:var(--bg-2); display:grid; place-items:center; animation:pinDrop .5s cubic-bezier(.2,.8,.3,1.2) backwards; }
   .map-pin img { width:100%; height:100%; object-fit:cover; }
   .pop { width:160px; } .pop .pi { width:100%; height:100px; object-fit:cover; border-radius:8px; background:var(--bg-2); }
   .pop .pd { font-weight:800; margin-top:6px; font-size:14px; } .pop .pm { font-size:11.5px; color:var(--ink-soft); }
@@ -394,14 +398,16 @@ function timeAgo(ts) { const d = (Date.now() - ts) / 1000;
 const isToday = (ts) => { const d = new Date(ts), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); };
 
 /* ===================== RINGS ===================== */
-function ringSVG(pct, color, dark, val, size = 50, stroke = 5.5) {
+function ringSVG(pct, color, dark, val, size = 50, stroke = 5.5, animate = false) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.min(pct, 1));
   const track = dark ? "rgba(43,42,39,.12)" : "rgba(255,255,255,.18)";
+  const prog = animate
+    ? `stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="--c:${c.toFixed(1)};--o:${off.toFixed(1)};animation:ringFill .8s cubic-bezier(.3,.8,.3,1) both"`
+    : `stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"`;
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/>
     <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
-      stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
-      transform="rotate(-90 ${size/2} ${size/2})"/>
+      stroke-linecap="round" ${prog} transform="rotate(-90 ${size/2} ${size/2})"/>
     <text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" class="ring-num ${dark ? "dark" : ""}">${val}</text>
   </svg>`;
 }
@@ -421,7 +427,7 @@ function renderRings() {
   const big = $("#todayRings");
   if (big) big.innerHTML = [
     ["calories", t.kcal, s.goalKcal, "var(--kcal)", "kcal"], ["protein", t.protein, s.goalProtein, "var(--protein)", "g"],
-  ].map(([lbl, v, g, col, u]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, true, v, 84, 8)}<span class="lbl">${lbl}</span><span class="goal">/ ${g}${u}</span></div>`).join("");
+  ].map(([lbl, v, g, col, u]) => `<div class="ring-u">${ringSVG(g ? v / g : 0, col, true, v, 84, 8, true)}<span class="lbl">${lbl}</span><span class="goal">/ ${g}${u}</span></div>`).join("");
   const n = $("#todayNote");
   if (n) n.textContent = cache.filter((e) => isToday(e.ts)).length + " logged today";
 }
@@ -528,7 +534,8 @@ async function runCutout(blob) {
     if (!isCut) { setChip(errMsg || "kept the photo", true); setTimeout(() => { if (cstate.token === token) $("#cutChip").classList.add("hidden"); }, 2600); return; }
     $("#cutChip").classList.add("hidden"); cstate.display = displayBlob; cstate.cut = true;
     const img = $("#stageImg"); img.style.opacity = "0";
-    setTimeout(() => { img.src = url(displayBlob); $("#stage").classList.remove("framed"); $("#plate").style.display = "block"; img.style.opacity = "1"; }, 180);
+    setTimeout(() => { img.src = url(displayBlob); $("#stage").classList.remove("framed"); $("#plate").style.display = "block"; img.style.opacity = "1";
+      img.classList.remove("revealing"); void img.offsetWidth; img.classList.add("revealing"); }, 180);
     saveDraft();
   };
   const onProg = (key, cur, total) => { if (cstate.token !== token) return;
@@ -784,8 +791,8 @@ function renderMap() {
   renderPassport();
   const pts = cache.filter((e) => e.pinned && e.lat && e.lon); $("#emptyMap").classList.toggle("hidden", pts.length > 0);
   if (!pts.length) return; const bounds = [];
-  pts.forEach((e) => {
-    const icon = L.divIcon({ className:"", html:`<div class="map-pin"><img src="${url(e.blob)}"/></div>`, iconSize:[46,46], iconAnchor:[23,23] });
+  pts.forEach((e, i) => {
+    const icon = L.divIcon({ className:"", html:`<div class="map-pin" style="animation-delay:${Math.min(i * 70, 600)}ms"><img src="${url(e.blob)}"/></div>`, iconSize:[46,46], iconAnchor:[23,23] });
     const mac = (e.kcal != null) ? `<div class="pmac">${Math.round(e.kcal)} kcal${e.protein != null ? " · "+Math.round(e.protein)+"g protein" : ""}</div>` : "";
     L.marker([e.lat, e.lon], { icon }).addTo(layer).bindPopup(
       `<div class="pop"><img class="pi" src="${url(e.blob)}"/><div class="pd">${esc(e.dish || "Morsel")}</div>${mac}<div class="pm">${e.place ? esc(e.place) + " · " : ""}${timeAgo(e.ts)}</div></div>`);
