@@ -87,6 +87,10 @@
   .name-rule { height:2px; background:var(--line-2); border-radius:2px; width:56%; margin:2px auto 0; }
 
   .macro-row { display:flex; gap:9px; margin-top:16px; }
+  .portion-q { text-align:center; font-size:12px; font-weight:700; color:var(--ink-soft); margin-top:14px; }
+  .portion-row { display:flex; gap:7px; margin-top:8px; }
+  .portion { flex:1; padding:10px 3px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-weight:700; font-size:12.5px; color:var(--ink-soft); transition:transform .1s; }
+  .portion.sel { border-color:var(--clay); background:#FBEEE7; color:var(--clay-deep); transform:scale(1.04); }
   .macro { flex:1; background:var(--card); border:1.5px solid var(--line-2); border-radius:15px; padding:11px 8px;
            text-align:center; box-shadow:0 4px 12px var(--shadow); }
   .macro input { width:100%; border:none; background:transparent; font-family:inherit; font-weight:800; font-size:22px;
@@ -245,6 +249,13 @@
       <div class="macro-row">
         <div class="macro kcal"><input id="mKcal" inputmode="numeric" placeholder="—" /><div class="mlbl">kcal</div></div>
         <div class="macro protein"><input id="mProtein" inputmode="numeric" placeholder="—" /><div class="mlbl">protein g</div></div>
+      </div>
+      <div class="portion-q">how much did you actually eat?</div>
+      <div class="portion-row" id="portionRow">
+        <button class="portion sel" data-f="1">Whole</button>
+        <button class="portion" data-f="0.66">Most</button>
+        <button class="portion" data-f="0.5">Half</button>
+        <button class="portion" data-f="0.25">A bit</button>
       </div>
       <div class="analyze-note" id="analyzeNote"></div>
 
@@ -441,17 +452,19 @@ function squareCompress(file) {
 
 /* ===================== COMPOSE ===================== */
 const cstate = { id:null, ts:0, token:null, raw:null, display:null, cut:false,
-  dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, nearby:[] };
+  dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portionNote:"",
+  portionFactor:1, baseKcal:null, baseProtein:null, place:null, coords:null, pinned:false, nearby:[] };
 let composeOpen = false;
 
 async function openCompose(rawBlob) {
   Object.assign(cstate, { id:"m_"+Date.now(), ts:Date.now(), token:Symbol(), raw:rawBlob, display:rawBlob, cut:false,
-    dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portion:null, place:null, coords:null, pinned:false, nearby:[] });
+    dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portionNote:"",
+    portionFactor:1, baseKcal:null, baseProtein:null, place:null, coords:null, pinned:false, nearby:[] });
   composeOpen = true;
   $("#composeTitle").textContent = "New morsel";
   $("#nameIn").value = ""; $("#mKcal").value = ""; $("#mProtein").value = "";
   $("#analyzeNote").innerHTML = "";
-  resetPinUI();
+  selectPortionChip(1); resetPinUI();
 
   $("#compose").classList.add("show");
   $("#stage").classList.add("framed"); $("#stageImg").style.opacity = "1"; $("#stageImg").src = url(rawBlob); $("#plate").style.display = "none";
@@ -474,13 +487,27 @@ async function saveDraft() {
   if (!cstate.id || !cstate.display) return;
   await DB.put({ id:cstate.id, ts:cstate.ts, blob:cstate.display, cut:cstate.cut,
     dish:$("#nameIn").value.trim(), cuisine:cstate.cuisine,
-    kcal:numOrNull($("#mKcal").value), protein:numOrNull($("#mProtein").value), fiber:cstate.fiber,
+    kcal:numOrNull($("#mKcal").value), protein:numOrNull($("#mProtein").value), fiber:cstate.fiber, portion:cstate.portionFactor,
     confidence:cstate.confidence, pinned:!!cstate.pinned, place:cstate.place ? cstate.place.name : null,
     lat:cstate.coords ? cstate.coords.lat : null, lon:cstate.coords ? cstate.coords.lon : null });
 }
 const numOrNull = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
 const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveDraft(); renderRings(); }, 350); };
 ["#nameIn", "#mKcal", "#mProtein"].forEach((id) => $(id).addEventListener("input", saveSoon));
+
+// portion: the model estimates the WHOLE visible portion; user scales by how much they ate
+function setMacrosFromBase() {
+  if (cstate.baseKcal != null) $("#mKcal").value = Math.round(cstate.baseKcal * cstate.portionFactor);
+  if (cstate.baseProtein != null) $("#mProtein").value = Math.round(cstate.baseProtein * cstate.portionFactor);
+}
+function selectPortionChip(f) { document.querySelectorAll("#portionRow .portion").forEach((x) => x.classList.toggle("sel", parseFloat(x.dataset.f) === f)); }
+document.querySelectorAll("#portionRow .portion").forEach((b) => b.onclick = () => {
+  cstate.portionFactor = parseFloat(b.dataset.f); selectPortionChip(cstate.portionFactor);
+  setMacrosFromBase(); saveDraft(); renderRings();
+});
+// typing a number takes over — re-derive the whole-portion base so the chips stay consistent
+$("#mKcal").addEventListener("input", () => { const v = numOrNull($("#mKcal").value); cstate.baseKcal = (v != null && cstate.portionFactor) ? v / cstate.portionFactor : v; });
+$("#mProtein").addEventListener("input", () => { const v = numOrNull($("#mProtein").value); cstate.baseProtein = (v != null && cstate.portionFactor) ? v / cstate.portionFactor : v; });
 
 /* ---------- cutout ---------- */
 function setChip(text, isErr) { const c = $("#cutChip"); c.classList.remove("hidden"); c.classList.toggle("err", !!isErr);
@@ -547,11 +574,12 @@ async function analyzeFood(rawBlob) {
   }
 }
 function applyFoodResult(d) {
-  cstate.cuisine = d.cuisine || ""; cstate.confidence = d.confidence || null; cstate.portion = d.portion_note || "";
+  cstate.cuisine = d.cuisine || ""; cstate.confidence = d.confidence || null; cstate.portionNote = d.portion_note || "";
   if (!$("#nameIn").value.trim() && d.dish) $("#nameIn").value = d.dish;
-  if (!$("#mKcal").value && d.calories != null) $("#mKcal").value = Math.round(d.calories);
-  if (!$("#mProtein").value && d.protein_g != null) $("#mProtein").value = Math.round(d.protein_g);
+  if (cstate.baseKcal == null && d.calories != null) cstate.baseKcal = d.calories;
+  if (cstate.baseProtein == null && d.protein_g != null) cstate.baseProtein = d.protein_g;
   if (cstate.fiber == null && d.fiber_g != null) cstate.fiber = Math.round(d.fiber_g);
+  setMacrosFromBase();
   const dot = d.confidence === "high" ? "🟢" : d.confidence === "medium" ? "🟡" : "🟠";
   $("#analyzeNote").innerHTML = `${dot} ${esc(d.confidence || "")} confidence · ${esc(d.portion_note || "")} — tap any number to fix`;
   saveDraft(); renderRings();
@@ -682,7 +710,8 @@ async function renderBook() {
   cache.forEach((e) => {
     const card = document.createElement("div"); card.className = "m-card" + (e.cut ? " cut" : ""); card.dataset.id = e.id;
     const dishHtml = e.dish ? `<div class="dish">${esc(e.dish)}</div>` : `<div class="dish unnamed">Tap to name…</div>`;
-    const kc = (e.kcal != null) ? `<div class="kc">${Math.round(e.kcal)} kcal</div>` : "";
+    const pl = (e.portion && e.portion < 1) ? ` <span style="color:var(--ink-soft);font-weight:600">· ${e.portion >= .66 ? "most" : e.portion >= .5 ? "½" : "a bit"}</span>` : "";
+    const kc = (e.kcal != null) ? `<div class="kc">${Math.round(e.kcal)} kcal${pl}</div>` : "";
     const sub = `${e.place ? `<span class="pin">📍 ${esc(e.place)}</span> · ` : ""}${timeAgo(e.ts)}`;
     card.innerHTML = `<button class="del" data-id="${e.id}">✕</button>
       <div class="well"><img class="${e.cut ? "cut" : "full"}" src="${url(e.blob)}" alt="${esc(e.dish || "morsel")}"/></div>
@@ -695,13 +724,16 @@ async function renderBook() {
   renderRings();
 }
 function openComposeForEdit(e) {
+  const pf = e.portion || 1;
   Object.assign(cstate, { id:e.id, ts:e.ts, token:Symbol(), raw:e.blob, display:e.blob, cut:e.cut,
     cuisine:e.cuisine || "", fiber:(e.fiber != null ? e.fiber : null), confidence:e.confidence || null,
+    portionFactor:pf, baseKcal:(e.kcal != null ? e.kcal / pf : null), baseProtein:(e.protein != null ? e.protein / pf : null),
     place:e.place ? { name:e.place } : null, coords:(e.lat && e.lon) ? { lat:e.lat, lon:e.lon } : null, pinned:!!e.pinned, nearby:[] });
   composeOpen = true;
   $("#composeTitle").textContent = "Edit card";
   $("#nameIn").value = e.dish || ""; $("#mKcal").value = e.kcal != null ? Math.round(e.kcal) : "";
   $("#mProtein").value = e.protein != null ? Math.round(e.protein) : "";
+  selectPortionChip(pf);
   $("#analyzeNote").innerHTML = "";
   $("#cutChip").classList.add("hidden");
   const img = $("#stageImg"); img.style.opacity = "1"; img.src = url(e.blob);
