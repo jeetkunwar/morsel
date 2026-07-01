@@ -151,8 +151,15 @@
 
   /* ===== MAP ===== */
   #mapEl { flex:1; }
-  .passport { flex:none; margin:calc(62px + env(safe-area-inset-top)) 14px 8px; background:var(--surface);
-              border:2px dashed var(--clay); border-radius:18px; padding:13px 12px 12px; box-shadow:0 6px 16px var(--shadow); }
+  #foodmapView { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(110px + env(safe-area-inset-bottom)); }
+  #geoMapView { display:none; flex:1; flex-direction:column; }
+  .map-back-bar { flex:none; padding:calc(58px + env(safe-area-inset-top)) 14px 8px; }
+  .map-back { border:1.5px solid var(--line-2); background:var(--surface); color:var(--ink); font-family:inherit; font-weight:700; font-size:14px; padding:9px 16px; border-radius:999px; }
+  .pinned-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:4px 14px 0; }
+  .passport { flex:none; margin:calc(62px + env(safe-area-inset-top)) 14px 14px; background:var(--surface);
+              border:2px dashed var(--clay); border-radius:18px; padding:13px 12px 12px; box-shadow:0 6px 16px var(--shadow); cursor:pointer; transition:transform .12s; }
+  .passport:active { transform:scale(.985); }
+  .passport-tap { text-align:center; font-size:9.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--clay-deep); margin-top:11px; opacity:.85; }
   .passport-title { text-align:center; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--clay-deep); margin-bottom:9px; }
   .passport-stats { display:flex; justify-content:space-around; }
   .pstat { text-align:center; flex:1; }
@@ -240,10 +247,16 @@
 
   <!-- ===== MAP ===== -->
   <section class="screen" id="map">
-    <div class="passport" id="passport"></div>
-    <div id="mapEl"></div>
-    <div class="empty hidden" id="emptyMap" style="position:absolute;top:42%;left:0;right:0;">
-      <div class="big">🗺️</div><h2>Foodmap's empty</h2><p>Tap <b>📍 Pin to foodmap</b> on a morsel<br/>worth remembering — it lands here.</p>
+    <div id="foodmapView">
+      <div class="passport" id="passport"></div>
+      <div class="pinned-grid" id="pinnedGrid"></div>
+      <div class="empty hidden" id="emptyMap">
+        <div class="big">🗺️</div><h2>Your foodmap's empty</h2><p>Tap <b>📍 Pin to my foodmap</b> on a bite<br/>worth remembering — it collects here.</p>
+      </div>
+    </div>
+    <div id="geoMapView">
+      <div class="map-back-bar"><button class="map-back" id="mapBack">← Foodmap</button></div>
+      <div id="mapEl"></div>
     </div>
   </section>
 
@@ -771,18 +784,35 @@ function renderPassport() {
   box.innerHTML = `<div class="passport-title">🛂 your food passport</div>
     <div class="passport-stats">
       ${stat(pinned.length, "dishes")}${stat(uniq((e) => e.city), "cities")}${stat(uniq((e) => e.cuisine), "cuisines")}${stat(uniq((e) => e.place), "spots")}
-    </div>`;
+    </div>
+    <div class="passport-tap">tap to open the map ›</div>`;
 }
+// Foodmap tab = curated collection (passport + pinned dishes). The geo map is behind the passport.
+function renderFoodmap() {
+  renderPassport();
+  const pinned = cache.filter((e) => e.pinned);
+  const grid = $("#pinnedGrid"); grid.innerHTML = "";
+  $("#emptyMap").classList.toggle("hidden", pinned.length > 0);
+  pinned.forEach((e) => {
+    const card = document.createElement("div"); card.className = "m-card" + (e.cut ? " cut" : ""); card.dataset.id = e.id;
+    const dishHtml = e.dish ? `<div class="dish">${esc(e.dish)}</div>` : `<div class="dish unnamed">Tap to name…</div>`;
+    const meta = `${e.place ? `<span class="pin">📍 ${esc(e.place)}</span>` : ""}${e.city ? (e.place ? " · " : "") + esc(e.city) : ""}`;
+    card.innerHTML = `<div class="well"><img class="${e.cut ? "cut" : "full"}" src="${url(e.blob)}" alt="${esc(e.dish || "bite")}"/></div>${dishHtml}<div class="meta">${meta}</div>`;
+    card.onclick = () => openComposeForEdit(e);
+    grid.appendChild(card);
+  });
+}
+function showGeoMap() { $("#foodmapView").style.display = "none"; $("#geoMapView").style.display = "flex"; renderMap(); }
+function showFoodmap() { $("#geoMapView").style.display = "none"; $("#foodmapView").style.display = "block"; }
 function renderMap() {
   ensureMap(); setTimeout(() => lmap.invalidateSize(), 60); layer.clearLayers();
-  renderPassport();
-  const pts = cache.filter((e) => e.pinned && e.lat && e.lon); $("#emptyMap").classList.toggle("hidden", pts.length > 0);
-  if (!pts.length) return; const bounds = [];
+  const pts = cache.filter((e) => e.pinned && e.lat && e.lon);
+  if (!pts.length) { lmap.setView([20, 78], 4); return; }
+  const bounds = [];
   pts.forEach((e, i) => {
     const icon = L.divIcon({ className:"", html:`<div class="map-pin" style="animation-delay:${Math.min(i * 70, 600)}ms"><img src="${url(e.blob)}"/></div>`, iconSize:[46,46], iconAnchor:[23,23] });
-    const mac = (e.kcal != null) ? `<div class="pmac">${Math.round(e.kcal)} kcal${e.protein != null ? " · "+Math.round(e.protein)+"g protein" : ""}</div>` : "";
     L.marker([e.lat, e.lon], { icon }).addTo(layer).bindPopup(
-      `<div class="pop"><img class="pi" src="${url(e.blob)}"/><div class="pd">${esc(e.dish || "Morsel")}</div>${mac}<div class="pm">${e.place ? esc(e.place) + " · " : ""}${timeAgo(e.ts)}</div></div>`);
+      `<div class="pop"><img class="pi" src="${url(e.blob)}"/><div class="pd">${esc(e.dish || "Bite")}</div><div class="pm">${e.place ? esc(e.place) + " · " : ""}${timeAgo(e.ts)}</div></div>`);
     bounds.push([e.lat, e.lon]);
   });
   bounds.length === 1 ? lmap.setView(bounds[0], 16) : lmap.fitBounds(bounds, { padding:[50,50], maxZoom:16 });
@@ -793,6 +823,8 @@ function openSheet(id) { if (id === "settingsSheet") loadSettingsForm(); if (id 
 function closeSheet(id) { $("#" + id).classList.remove("show"); }
 $("#gearBtn").onclick = () => openSheet("settingsSheet");
 $("#ringsBar").onclick = () => openSheet("todaySheet");
+$("#passport").onclick = showGeoMap;
+$("#mapBack").onclick = showFoodmap;
 document.querySelectorAll("[data-close]").forEach((b) => b.onclick = () => closeSheet(b.dataset.close));
 document.querySelectorAll(".sheet").forEach((sh) => sh.addEventListener("click", (e) => { if (e.target === sh) sh.classList.remove("show"); }));
 function applyProviderUI(p) {
@@ -821,7 +853,7 @@ async function go(view) {
   $("#" + view).classList.add("active");
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.go === view));
   if (view === "cam") startCamera(); else stopCamera();
-  if (view === "map") renderMap();
+  if (view === "map") { showFoodmap(); renderFoodmap(); }
 }
 // the round Snap button is the only thing that captures: shoot if already on camera, else just go there
 function snapTab() { if ($("#cam").classList.contains("active") && !composeOpen) captureFrame(); else go("cam"); }
