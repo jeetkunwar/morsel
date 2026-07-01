@@ -5,21 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#FAF8F3" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<title>Morsel — snap what you eat</title>
+<title>Munchies — snap what you eat</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
   :root {
-    --bg:#FAF8F3; --bg-2:#F1EEE6; --card:#FFFFFF; --ink:#2B2A27; --ink-soft:#7A786F;
-    --clay:#CC785C; --clay-deep:#B5634A; --line:#E7E3D8; --line-2:#E4E0D6;
-    --shadow:rgba(43,42,39,0.14); --good:#5FA37A;
-    --kcal:#CC785C; --protein:#5FA37A; --fiber:#9B86C9;
+    --bg:#0B0B0B; --bg-2:#151515; --card:#161616; --surface:#202020; --surface-2:#2A2A2A;
+    --ink:#F4F1EA; --ink-soft:#8C887F;
+    --clay:#D2A679; --clay-deep:#E4C29A; --accent-soft:rgba(210,166,121,0.15);
+    --line:#242424; --line-2:#323232; --shadow:rgba(0,0,0,0.55); --good:#9DB89A;
+    --kcal:#D2A679; --protein:#9DB89A; --fiber:#B7A6D9;
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; overscroll-behavior:none; }
-  body { font-family:ui-rounded,"SF Pro Rounded","Segoe UI",system-ui,sans-serif; background:var(--bg);
+  body { font-family:-apple-system,"SF Pro Text","Segoe UI",Helvetica,system-ui,sans-serif; background:var(--bg);
          color:var(--ink); -webkit-font-smoothing:antialiased; height:100dvh; overflow:hidden; }
   .app { position:relative; height:100dvh; max-width:560px; margin:0 auto; overflow:hidden; }
 
@@ -31,11 +32,11 @@
   .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
   .brand { font-weight:800; font-size:24px; letter-spacing:-.5px; } .brand .dot { color:var(--clay); }
   .brand-sub { font-size:12px; color:var(--ink-soft); margin-top:1px; }
-  .chip { font-size:12px; font-weight:700; color:var(--clay-deep); background:#fff;
+  .chip { font-size:12px; font-weight:700; color:var(--clay-deep); background:var(--surface);
           border:1.5px solid var(--line-2); border-radius:999px; padding:5px 11px; }
 
   /* ===== CAMERA ===== */
-  #cam { background:#15140f; }
+  #cam { background:#000; }
   .vf-wrap { flex:1; position:relative; overflow:hidden; }
   #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   #vfFallback { position:absolute; inset:0; display:none; flex-direction:column; align-items:center;
@@ -74,9 +75,9 @@
   .stage img { max-width:100%; max-height:100%; object-fit:contain; filter:drop-shadow(0 14px 18px rgba(0,0,0,.28)); transition:opacity .25s; }
   .stage.framed img { width:100%; height:100%; object-fit:cover; border-radius:22px; filter:drop-shadow(0 12px 22px rgba(0,0,0,.18)); }
   .cut-chip { display:flex; align-items:center; gap:8px; justify-content:center; width:max-content; margin:2px auto 0;
-              font-size:12.5px; font-weight:700; color:var(--ink-soft); background:#fff; border:1.5px solid var(--line-2);
+              font-size:12.5px; font-weight:700; color:var(--ink-soft); background:var(--surface); border:1.5px solid var(--line-2);
               border-radius:999px; padding:6px 13px; }
-  .cut-chip.err { color:var(--clay-deep); border-color:#EAD3C8; background:#FBEEE7; } .cut-chip.err .ring2 { display:none; }
+  .cut-chip.err { color:var(--clay-deep); border-color:var(--line-2); background:var(--accent-soft); } .cut-chip.err .ring2 { display:none; }
   .ring2 { width:13px; height:13px; border:2.5px solid var(--line-2); border-top-color:var(--clay);
            border-radius:50%; animation:sp .8s linear infinite; display:inline-block; }
   @keyframes sp { to{transform:rotate(360deg);} }
@@ -93,8 +94,8 @@
   .macro-row { display:flex; gap:9px; margin-top:16px; }
   .portion-q { text-align:center; font-size:12px; font-weight:700; color:var(--ink-soft); margin-top:14px; }
   .portion-row { display:flex; gap:7px; margin-top:8px; }
-  .portion { flex:1; padding:10px 3px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-weight:700; font-size:12.5px; color:var(--ink-soft); transition:transform .1s; }
-  .portion.sel { border-color:var(--clay); background:#FBEEE7; color:var(--clay-deep); transform:scale(1.04); }
+  .portion { flex:1; padding:10px 3px; border:1.5px solid var(--line-2); border-radius:12px; background:var(--surface); font-family:inherit; font-weight:700; font-size:12.5px; color:var(--ink-soft); transition:transform .1s; }
+  .portion.sel { border-color:var(--clay); background:var(--accent-soft); color:var(--clay-deep); transform:scale(1.04); }
   .macro { flex:1; background:var(--card); border:1.5px solid var(--line-2); border-radius:15px; padding:11px 8px;
            text-align:center; box-shadow:0 4px 12px var(--shadow); }
   .macro input { width:100%; border:none; background:transparent; font-family:inherit; font-weight:800; font-size:22px;
@@ -105,45 +106,52 @@
   .analyze-note .tap { color:var(--clay-deep); font-weight:700; text-decoration:underline; }
 
   .loc-card { margin-top:18px; background:var(--card); border:1.5px solid var(--line-2); border-radius:18px; padding:15px; box-shadow:0 6px 16px var(--shadow); }
-  .pin-trigger { width:100%; padding:13px; border:1.5px dashed var(--line-2); border-radius:13px; background:#fff; font-family:inherit; font-weight:700; font-size:14.5px; color:var(--clay-deep); }
+  .pin-trigger { width:100%; padding:13px; border:1.5px dashed var(--line-2); border-radius:13px; background:var(--surface); font-family:inherit; font-weight:700; font-size:14.5px; color:var(--clay-deep); }
+  #placeInput { width:100%; padding:13px 14px; border:1.5px solid var(--line-2); border-radius:13px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:16px; }
+  #placeInput:focus { outline:none; border-color:var(--clay); }
+  .loc-hint { font-size:12px; color:var(--ink-soft); margin:9px 3px 0; min-height:14px; display:flex; align-items:center; gap:6px; }
+  .opt-list { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+  .sugg { padding:8px 12px; border:1.5px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; }
+  .sugg .dist { color:var(--ink-soft); font-weight:500; margin-left:3px; }
   .loc-q { font-size:13px; color:var(--ink-soft); font-weight:700; display:flex; align-items:center; gap:8px; }
   .loc-name { font-size:20px; font-weight:800; margin:8px 0 2px; letter-spacing:-.3px; }
   .loc-dist { font-size:12px; color:var(--ink-soft); }
   .loc-actions { display:flex; gap:9px; margin-top:13px; }
-  .btn-yes { flex:1; padding:13px; border:none; border-radius:13px; background:var(--clay); color:#fff; font-weight:800; font-size:15px; font-family:inherit; box-shadow:0 6px 14px rgba(204,120,92,.35); }
-  .btn-no { padding:13px 16px; border:1.5px solid var(--line-2); border-radius:13px; background:#fff; color:var(--ink-soft); font-weight:700; font-size:14px; font-family:inherit; }
+  .btn-yes { flex:1; padding:13px; border:none; border-radius:13px; background:var(--clay); color:#151515; font-weight:800; font-size:15px; font-family:inherit; }
+  .btn-no { padding:13px 16px; border:1.5px solid var(--line-2); border-radius:13px; background:var(--surface); color:var(--ink-soft); font-weight:700; font-size:14px; font-family:inherit; }
   .others { margin-top:12px; display:none; flex-direction:column; gap:8px; } .others.show { display:flex; }
   .others .lbl { font-size:12px; color:var(--ink-soft); font-weight:700; }
-  .opt { text-align:left; width:100%; padding:11px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; display:flex; align-items:center; gap:10px; }
+  .opt { text-align:left; width:100%; padding:11px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:var(--surface); font-family:inherit; display:flex; align-items:center; gap:10px; }
   .opt .on { font-weight:700; font-size:14.5px; } .opt .od { font-size:12px; color:var(--ink-soft); } .opt .oi { font-size:19px; }
-  .add-place input, .resto-custom { width:100%; padding:11px 13px; border:1.5px dashed var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-size:14px; }
+  .add-place input, .resto-custom { width:100%; padding:11px 13px; border:1.5px dashed var(--line-2); border-radius:12px; background:var(--surface); font-family:inherit; font-size:14px; }
   .loc-confirmed { display:flex; align-items:center; gap:8px; color:var(--good); font-weight:700; font-size:14px; }
   .autosave-note { text-align:center; font-size:12px; color:var(--ink-soft); margin-top:18px; opacity:.85; }
 
   /* ===== BOOK (collage) ===== */
-  .collage { column-count:2; column-gap:14px; margin-top:10px; }
-  .m-card { break-inside:avoid; margin-bottom:16px; position:relative; text-align:center; cursor:pointer; }
-  .m-card .well { border-radius:18px; padding:10px; display:grid; place-items:center; position:relative; }
-  .m-card.cut .well { background:var(--bg-2); }
-  .m-card .well img.cut { width:88%; object-fit:contain; filter:drop-shadow(0 10px 14px rgba(0,0,0,.22)); }
-  .m-card .well img.full { width:100%; border-radius:14px; }
-  .m-card .dish { font-weight:800; font-size:15px; margin:8px 3px 1px; letter-spacing:-.2px; line-height:1.15; }
-  .m-card .dish.unnamed { color:#BDB9AE; font-weight:600; }
-  .m-card .kc { font-size:12px; font-weight:700; color:var(--kcal); }
-  .m-card .sub { font-size:11px; color:var(--ink-soft); margin-top:1px; }
-  .m-card .sub .pin { color:var(--clay-deep); font-weight:700; }
-  .m-card .del { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:999px; border:none;
-                 background:rgba(43,42,39,.45); color:#fff; font-size:13px; opacity:0; transition:opacity .2s; z-index:2; }
+  .collage { margin-top:6px; }
+  .day-head { font-size:11px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:var(--ink-soft); margin:24px 2px 12px; }
+  .day-head:first-child { margin-top:6px; }
+  .day-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .m-card { position:relative; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 12px 13px; cursor:pointer; }
+  .m-card .well { aspect-ratio:1/1; display:grid; place-items:center; position:relative; border-radius:12px; overflow:hidden;
+                  background:radial-gradient(120% 120% at 50% 32%, #212121 0%, #0E0E0E 78%); }
+  .m-card .well img.cut { width:84%; object-fit:contain; filter:drop-shadow(0 12px 16px rgba(0,0,0,.65)); }
+  .m-card .well img.full { width:100%; height:100%; object-fit:cover; }
+  .m-card .dish { font-weight:600; font-size:15px; margin:11px 2px 2px; letter-spacing:-.2px; line-height:1.2; color:var(--ink); }
+  .m-card .dish.unnamed { color:var(--ink-soft); font-weight:500; }
+  .m-card .meta { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .m-card .meta .pin { color:var(--clay-deep); font-weight:600; }
+  .m-card .del { position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:999px; border:none;
+                 background:rgba(0,0,0,.6); color:#fff; font-size:13px; opacity:0; transition:opacity .2s; z-index:2; }
   .m-card:active .del { opacity:1; }
-  .m-card:nth-child(2n) { transform:rotate(.6deg); } .m-card:nth-child(2n+1) { transform:rotate(-.5deg); }
 
   .empty { text-align:center; color:var(--ink-soft); padding:50px 24px; }
   .empty .big { font-size:52px; } .empty h2 { color:var(--ink); margin:12px 0 6px; }
-  .empty .cta { margin-top:16px; display:inline-block; background:var(--clay); color:#fff; font-weight:800; padding:12px 20px; border-radius:14px; border:none; font-family:inherit; font-size:15px; }
+  .empty .cta { margin-top:16px; display:inline-block; background:var(--clay); color:#151515; font-weight:800; padding:12px 20px; border-radius:14px; border:none; font-family:inherit; font-size:15px; }
 
   /* ===== MAP ===== */
   #mapEl { flex:1; }
-  .passport { flex:none; margin:calc(62px + env(safe-area-inset-top)) 14px 8px; background:#FBFAF6;
+  .passport { flex:none; margin:calc(62px + env(safe-area-inset-top)) 14px 8px; background:var(--surface);
               border:2px dashed var(--clay); border-radius:18px; padding:13px 12px 12px; box-shadow:0 6px 16px var(--shadow); }
   .passport-title { text-align:center; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--clay-deep); margin-bottom:9px; }
   .passport-stats { display:flex; justify-content:space-around; }
@@ -162,12 +170,12 @@
   /* ===== Bottom nav ===== */
   nav.tabs { position:absolute; bottom:0; left:0; right:0; z-index:2000; display:flex; justify-content:center;
              padding:10px 14px calc(12px + env(safe-area-inset-bottom)); pointer-events:none; }
-  .tabs .bar { display:flex; gap:4px; background:#fff; border:1.5px solid var(--line-2); border-radius:999px; padding:6px; box-shadow:0 8px 22px var(--shadow); pointer-events:auto; }
+  .tabs .bar { display:flex; gap:4px; background:var(--surface); border:1.5px solid var(--line-2); border-radius:999px; padding:6px; box-shadow:0 8px 22px var(--shadow); pointer-events:auto; }
   .tab { border:none; background:transparent; font-family:inherit; font-weight:700; font-size:13px; color:var(--ink-soft); padding:9px 15px; border-radius:999px; display:flex; align-items:center; gap:6px; }
   .tab.active { background:var(--bg-2); color:var(--ink); } .tab .ic { font-size:16px; }
-  .tab.shoot { background:var(--clay); color:#fff; padding:9px 17px; } .tab.shoot.active { background:var(--clay); }
+  .tab.shoot { background:var(--clay); color:#151515; padding:9px 17px; } .tab.shoot.active { background:var(--clay); }
   #cam nav.tabs .bar { background:rgba(20,19,15,.55); border-color:rgba(255,255,255,.14); backdrop-filter:blur(8px); }
-  #cam .tab { color:rgba(255,255,255,.7); } #cam .tab.active { background:rgba(255,255,255,.16); color:#fff; } #cam .tab.shoot { background:var(--clay); color:#fff; }
+  #cam .tab { color:rgba(255,255,255,.7); } #cam .tab.active { background:rgba(255,255,255,.16); color:#fff; } #cam .tab.shoot { background:var(--clay); color:#151515; }
 
   /* ===== Sheets (today / settings) ===== */
   .sheet { position:absolute; inset:0; z-index:3000; background:rgba(20,19,15,.4); display:none; align-items:flex-end; }
@@ -181,16 +189,16 @@
   .today-rings .ring-u .lbl { font-size:12px; font-weight:700; color:var(--ink-soft); }
   .today-rings .ring-u .goal { font-size:11px; color:var(--ink-soft); }
   .fld { margin-top:14px; } .fld label { display:block; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; }
-  .fld input, .fld select { width:100%; padding:12px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:#fff; font-family:inherit; font-size:15px; color:var(--ink); }
+  .fld input, .fld select { width:100%; padding:12px 13px; border:1.5px solid var(--line-2); border-radius:12px; background:var(--surface); font-family:inherit; font-size:15px; color:var(--ink); }
   .fld input:focus, .fld select:focus { outline:none; border-color:var(--clay); }
   .goals-grid { display:flex; gap:9px; } .goals-grid .fld { flex:1; }
-  .save-settings { width:100%; margin-top:18px; padding:15px; border:none; border-radius:14px; background:var(--ink); color:#fff; font-weight:800; font-size:16px; font-family:inherit; }
+  .save-settings { width:100%; margin-top:18px; padding:15px; border:none; border-radius:14px; background:var(--clay); color:#151515; font-weight:800; font-size:16px; font-family:inherit; }
   .note { font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5; }
   .note b { color:var(--clay-deep); }
 
   .hidden { display:none !important; }
   #toast { position:absolute; bottom:120px; left:50%; transform:translateX(-50%) translateY(20px); z-index:3500;
-           background:var(--ink); color:#fff; padding:11px 18px; border-radius:999px; font-weight:700; font-size:14px; opacity:0; transition:all .3s; pointer-events:none; }
+           background:var(--surface-2); color:var(--ink); border:1px solid var(--line-2); padding:11px 18px; border-radius:999px; font-weight:700; font-size:14px; opacity:0; transition:all .3s; pointer-events:none; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
@@ -206,7 +214,7 @@
         <div><b>Camera not available here</b><br/><span style="opacity:.8;font-size:13px">Tap anywhere to pick a photo instead</span></div>
       </div>
       <div class="vf-top">
-        <div class="wm">Morsel<span style="color:var(--clay)">.</span></div>
+        <div class="wm">Munchies<span style="color:var(--clay)">.</span></div>
         <button class="gear" id="gearBtn">⚙</button>
       </div>
       <div class="vf-hint">point at what you're eating</div>
@@ -218,13 +226,13 @@
   <section class="screen" id="book">
     <div class="scroll">
       <div class="head">
-        <div><div class="brand">Morsel<span class="dot">.</span></div><div class="brand-sub">your food scrapbook</div></div>
-        <div class="chip" id="countChip">0 morsels</div>
+        <div><div class="brand">Munchies<span class="dot">.</span></div><div class="brand-sub">your food scrapbook</div></div>
+        <div class="chip" id="countChip">0 bites</div>
       </div>
       <div class="collage" id="feed"></div>
       <div class="empty hidden" id="emptyBook">
-        <div class="big">🍳</div><h2>No morsels yet</h2>
-        <p>Point the camera at your next bite<br/>and snap. Name + macros fill in.</p>
+        <div class="big">🍳</div><h2>Nothing here yet</h2>
+        <p>Point the camera at your next bite<br/>and snap — it lands here instantly.</p>
         <button class="cta" data-go="cam">Open camera</button>
       </div>
     </div>
@@ -243,7 +251,7 @@
   <section id="compose">
     <div class="compose-top">
       <button id="discardBtn">✕ Discard</button>
-      <span style="font-weight:800" id="composeTitle">New morsel</span>
+      <span style="font-weight:800" id="composeTitle">New bite</span>
       <button id="doneBtn" style="color:var(--clay-deep)">Done ✓</button>
     </div>
     <div class="compose-body">
@@ -272,21 +280,9 @@
       <div class="loc-card" id="locCard">
         <button class="pin-trigger" id="pinTrigger">📍 Pin this to my foodmap</button>
         <div id="locFlow" class="hidden">
-          <div class="loc-q" id="locQ"><span class="ring2"></span> finding where you are…</div>
-          <div id="locConfirmBlock" class="hidden">
-            <div class="loc-name" id="locName">—</div>
-            <div class="loc-dist" id="locDist"></div>
-            <div class="loc-actions">
-              <button class="btn-yes" id="btnYes">✓ Yes, here</button>
-              <button class="btn-no" id="btnNo">Not here</button>
-            </div>
-            <div class="others" id="others">
-              <span class="lbl">Pick the right one:</span>
-              <div id="optList"></div>
-              <div class="add-place"><input id="addPlace" placeholder="＋ Add a place by name" /></div>
-              <button class="btn-no hidden" id="retryLoc" style="margin-top:2px">↻ Retry location</button>
-            </div>
-          </div>
+          <input id="placeInput" placeholder="Where did you eat this?" autocapitalize="words" autocorrect="off" />
+          <div class="loc-hint" id="locHint"></div>
+          <div id="optList" class="opt-list"></div>
         </div>
         <div id="locDone" class="hidden"><div class="loc-confirmed">📍 <span id="doneName"></span>
           <button class="btn-no" id="changeLoc" style="margin-left:auto;padding:6px 10px">change</button>
@@ -473,7 +469,7 @@ async function openCompose(rawBlob) {
     dish:"", cuisine:"", kcal:null, protein:null, fiber:null, confidence:null, portionNote:"",
     portionFactor:1, baseKcal:null, baseProtein:null, place:null, coords:null, city:null, pinned:false, nearby:[] });
   composeOpen = true;
-  $("#composeTitle").textContent = "New morsel";
+  $("#composeTitle").textContent = "New bite";
   $("#nameIn").value = ""; $("#mKcal").value = ""; $("#mProtein").value = "";
   $("#analyzeNote").innerHTML = "";
   selectPortionChip(1); resetPinUI();
@@ -490,8 +486,7 @@ async function openCompose(rawBlob) {
 function resetPinUI() {
   $("#pinTrigger").classList.remove("hidden"); $("#pinTrigger").textContent = "📍 Pin this to my foodmap";
   $("#locFlow").classList.add("hidden"); $("#locDone").classList.add("hidden");
-  $("#locConfirmBlock").classList.add("hidden"); $("#others").classList.remove("show");
-  $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; $("#optList").innerHTML = ""; $("#addPlace").value = "";
+  $("#placeInput").value = ""; $("#optList").innerHTML = ""; $("#locHint").innerHTML = "";
 }
 
 let saveTimer;
@@ -596,6 +591,7 @@ function applyFoodResult(d) {
   const dot = d.confidence === "high" ? "🟢" : d.confidence === "medium" ? "🟡" : "🟠";
   $("#analyzeNote").innerHTML = `${dot} ${esc(d.confidence || "")} confidence · ${esc(d.portion_note || "")} — tap any number to fix`;
   saveDraft(); renderRings();
+  if (!composeOpen) renderBook();   // if you already left, the card updates with the guess
 }
 function parseLooseJSON(t) { if (!t) return null; try { return JSON.parse(t); } catch {} const m = t.match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch {} } return null; }
 
@@ -649,21 +645,25 @@ async function callOpenRouter(s, b64) {
 
 /* ---------- location ---------- */
 const FOOD_ICONS = { restaurant:"🍽️", cafe:"☕", fast_food:"🍔", bar:"🍸", pub:"🍺", ice_cream:"🍦", food_court:"🍱", bakery:"🥐" };
-function setLocQ(html, spin) { const q = $("#locQ"); q.classList.remove("hidden"); q.innerHTML = (spin ? '<span class="ring2"></span> ' : "") + html; }
-function lookupLocation() {
-  $("#locConfirmBlock").classList.add("hidden"); $("#locDone").classList.add("hidden");
-  if (!navigator.geolocation) return locManual("No location on this device — add it yourself");
-  setLocQ("finding where you are…", true);
+function startPinLocation() {
+  $("#placeInput").value = ""; $("#optList").innerHTML = ""; $("#locHint").innerHTML = "";
+  setTimeout(() => $("#placeInput").focus(), 120);
+  if (!navigator.geolocation) { $("#locHint").textContent = "type the place name — location isn't available"; return; }
+  $("#locHint").innerHTML = `<span class="ring2"></span> finding you…`;
+  const tok = cstate.token;
   navigator.geolocation.getCurrentPosition(async (pos) => {
+    if (cstate.token !== tok) return;
     const { latitude: lat, longitude: lon } = pos.coords; cstate.coords = { lat, lon };
-    setLocQ("looking for places around you…", true);
-    try { const list = await overpass(lat, lon); cstate.nearby = list;
-      if (!list.length) return locManual("No food spots found nearby — add it yourself");
-      showConfirm(list[0], list.slice(1, 4));
-    } catch (e) { console.warn("overpass:", e); locManual("Couldn't reach the place finder — add it yourself"); }
-  }, (err) => { const msg = err.code === 1 ? "Location permission denied — allow it, or add the place"
-      : err.code === 3 ? "Location timed out — tap retry, or add the place" : "Couldn't get location — add the place";
-    locManual(msg, true); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+    reverseCity(lat, lon).then((c) => { if (cstate.token !== tok) return; cstate.city = c || null; $("#locHint").textContent = c ? "📍 near " + c : "📍 got your location"; });
+    try { const list = await overpass(lat, lon); if (cstate.token === tok) renderSuggestions(list.slice(0, 5)); } catch {}
+  }, () => { if (cstate.token === tok) $("#locHint").textContent = "type the place name — couldn't get GPS"; },
+     { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+}
+function renderSuggestions(list) {
+  const ol = $("#optList"); ol.innerHTML = "";
+  list.forEach((o) => { const b = document.createElement("button"); b.className = "sugg";
+    b.innerHTML = `${FOOD_ICONS[o.kind] || "🍽️"} ${esc(o.name)} <span class="dist">${o.dist}m</span>`;
+    b.onclick = () => confirmPlace(o.name, o.lat, o.lon); ol.appendChild(b); });
 }
 const OVERPASS = ["https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter"];
 async function overpass(lat, lon) {
@@ -679,26 +679,13 @@ async function overpass(lat, lon) {
 function dist(a, b, c, d) { const R = 6371000, t = (x) => x * Math.PI / 180;
   const s = Math.sin(t(c - a) / 2) ** 2 + Math.cos(t(a)) * Math.cos(t(c)) * Math.sin(t(d - b) / 2) ** 2;
   return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s))); }
-function showConfirm(top, others) {
-  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden");
-  $("#locName").textContent = top.name;
-  $("#locDist").textContent = `${FOOD_ICONS[top.kind] || "🍽️"} ${top.cuisine ? top.cuisine + " · " : ""}${top.dist} m away`;
-  $("#locName").dataset.lat = top.lat; $("#locName").dataset.lon = top.lon;
-  const ol = $("#optList"); ol.innerHTML = "";
-  others.forEach((o) => { const b = document.createElement("button"); b.className = "opt";
-    b.innerHTML = `<span class="oi">${FOOD_ICONS[o.kind] || "🍽️"}</span><span><span class="on">${esc(o.name)}</span><br/><span class="od">${o.dist} m away</span></span>`;
-    b.onclick = () => confirmPlace(o.name, o.lat, o.lon); ol.appendChild(b); });
-}
-$("#btnYes").onclick = () => { const n = $("#locName"); confirmPlace(n.textContent, +n.dataset.lat, +n.dataset.lon); };
-$("#btnNo").onclick = () => $("#others").classList.toggle("show");
-$("#addPlace").addEventListener("change", (e) => { const v = e.target.value.trim(); if (v) confirmPlace(v, cstate.coords && cstate.coords.lat, cstate.coords && cstate.coords.lon); });
-$("#pinTrigger").onclick = () => { $("#pinTrigger").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); lookupLocation(); };
-$("#changeLoc").onclick = () => { $("#locDone").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); cstate.place = null; lookupLocation(); };
+$("#pinTrigger").onclick = () => { $("#pinTrigger").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); startPinLocation(); };
+$("#changeLoc").onclick = () => { $("#locDone").classList.add("hidden"); $("#locFlow").classList.remove("hidden"); cstate.place = null; startPinLocation(); };
 $("#unpinBtn").onclick = () => { cstate.pinned = false; cstate.place = null; cstate.coords = null; cstate.city = null; resetPinUI(); saveDraft(); };
-$("#retryLoc").onclick = () => { $("#btnYes").style.display = ""; $("#btnNo").style.display = ""; lookupLocation(); };
+$("#placeInput").addEventListener("change", (e) => { const v = e.target.value.trim(); if (v) confirmPlace(v, cstate.coords && cstate.coords.lat, cstate.coords && cstate.coords.lon); });
 function confirmPlace(name, lat, lon) {
   cstate.place = { name }; if (lat && lon) cstate.coords = { lat, lon };
-  cstate.pinned = true; cstate.city = null;
+  cstate.pinned = true;
   $("#locFlow").classList.add("hidden"); $("#pinTrigger").classList.add("hidden");
   $("#locDone").classList.remove("hidden"); $("#doneName").textContent = name; saveDraft();
   const tok = cstate.token;
@@ -711,11 +698,6 @@ async function reverseCity(lat, lon) {
     return a.city || a.town || a.village || a.suburb || a.municipality || a.county || a.state_district || null;
   } catch { return null; }
 }
-function locManual(msg, retry) {
-  $("#locQ").classList.add("hidden"); $("#locConfirmBlock").classList.remove("hidden");
-  $("#locName").textContent = msg; $("#locDist").textContent = ""; $("#others").classList.add("show");
-  $("#btnYes").style.display = "none"; $("#btnNo").style.display = "none"; $("#retryLoc").classList.toggle("hidden", !retry);
-}
 
 /* ---------- compose done / discard ---------- */
 function closeCompose() { composeOpen = false; $("#compose").classList.remove("show"); $("#cutChip").classList.add("hidden"); }
@@ -723,29 +705,34 @@ $("#doneBtn").onclick = async () => { await saveDraft(); closeCompose(); await r
 $("#discardBtn").onclick = async () => { cstate.token = Symbol(); if (cstate.id) await DB.del(cstate.id); closeCompose(); await renderBook(); go("cam"); };
 
 /* ===================== BOOK ===================== */
-const PASTELS = ["#FFE8D6","#DCEFE4","#E8E1F5","#FBEFC9","#DBEAF4","#FBE0E2"];
-const TILTS = [-1.4, 0.9, -0.5, 1.2, -1.0, 0.6];
+const dayLabel = (ts) => { const d = new Date(ts), n = new Date(), s = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((s(n) - s(d)) / 86400000);
+  return diff === 0 ? "Today" : diff === 1 ? "Yesterday" : d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }); };
+const timeOfDay = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
 let cache = [];
 async function renderBook() {
   cache = await DB.all();
-  $("#countChip").textContent = cache.length + (cache.length === 1 ? " morsel" : " morsels");
+  $("#countChip").textContent = cache.length + (cache.length === 1 ? " bite" : " bites");
   const feed = $("#feed"); feed.innerHTML = "";
   $("#emptyBook").classList.toggle("hidden", cache.length > 0);
-  cache.forEach((e, i) => {
+  let lastLabel = null, grid = null;
+  cache.forEach((e) => {
+    const label = dayLabel(e.ts);
+    if (label !== lastLabel) { lastLabel = label;
+      const h = document.createElement("div"); h.className = "day-head"; h.textContent = label; feed.appendChild(h);
+      grid = document.createElement("div"); grid.className = "day-grid"; feed.appendChild(grid);
+    }
     const card = document.createElement("div"); card.className = "m-card" + (e.cut ? " cut" : ""); card.dataset.id = e.id;
-    card.style.transform = `rotate(${TILTS[i % TILTS.length]}deg)`;
     const dishHtml = e.dish ? `<div class="dish">${esc(e.dish)}</div>` : `<div class="dish unnamed">Tap to name…</div>`;
-    const pl = (e.portion && e.portion < 1) ? ` <span style="color:var(--ink-soft);font-weight:600">· ${e.portion >= .66 ? "most" : e.portion >= .5 ? "½" : "a bit"}</span>` : "";
-    const kc = (e.kcal != null) ? `<div class="kc">${Math.round(e.kcal)} kcal${pl}</div>` : "";
-    const sub = `${e.place ? `<span class="pin">📍 ${esc(e.place)}</span> · ` : ""}${timeAgo(e.ts)}`;
+    const meta = `${e.place ? `<span class="pin">📍 ${esc(e.place)}</span> · ` : ""}${timeOfDay(e.ts)}`;
     card.innerHTML = `<button class="del" data-id="${e.id}">✕</button>
-      <div class="well" style="background:${e.cut ? PASTELS[i % PASTELS.length] : "transparent"}"><img class="${e.cut ? "cut" : "full"}" src="${url(e.blob)}" alt="${esc(e.dish || "morsel")}"/></div>
-      ${dishHtml}${kc}<div class="sub">${sub}</div>`;
+      <div class="well"><img class="${e.cut ? "cut" : "full"}" src="${url(e.blob)}" alt="${esc(e.dish || "bite")}"/></div>
+      ${dishHtml}<div class="meta">${meta}</div>`;
     card.onclick = (ev) => { if (ev.target.closest(".del")) return; openComposeForEdit(e); };
-    feed.appendChild(card);
+    grid.appendChild(card);
   });
   feed.querySelectorAll(".del").forEach((b) => b.onclick = async (ev) => { ev.stopPropagation();
-    if (confirm("Remove this morsel?")) { await DB.del(b.dataset.id); await renderBook(); renderRings(); } });
+    if (confirm("Remove this?")) { await DB.del(b.dataset.id); await renderBook(); renderRings(); } });
   renderRings();
 }
 function openComposeForEdit(e) {
@@ -772,7 +759,7 @@ function openComposeForEdit(e) {
 let lmap, layer;
 function ensureMap() { if (lmap) return;
   lmap = L.map("mapEl", { zoomControl: true }).setView([20, 78], 4);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: "anonymous", attribution: "© OpenStreetMap" }).addTo(lmap);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", { maxZoom: 20, subdomains:"abcd", crossOrigin: "anonymous", attribution: "© OpenStreetMap © CARTO" }).addTo(lmap);
   layer = L.layerGroup().addTo(lmap); }
 function renderPassport() {
   const pinned = cache.filter((e) => e.pinned);
